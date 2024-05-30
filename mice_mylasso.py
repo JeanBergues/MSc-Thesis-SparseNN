@@ -29,7 +29,7 @@ def main() -> None:
     # Starting model, optimized with Adam
     inp = ks.layers.Input(shape=(X_train.shape[1],))
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer='l1_l2')(inp)
-    gw = ks.layers.Dense(units=int(4/3 * 77), activation='relu')(inp)
+    gw = ks.layers.Dense(units=100, activation='relu')(inp)
     merge = ks.layers.Concatenate()([skip, gw])
     output = ks.layers.Dense(units=8)(merge)
 
@@ -48,7 +48,7 @@ def main() -> None:
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
     nn.compile(optimizer=ks.optimizers.Adam(), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
-    nn.fit(X_trainv, y_trainv, validation_data=(X_val, y_val), epochs=1000, callbacks=[early_stop])
+    nn.fit(X_trainv, y_trainv, validation_data=(X_val, y_val), epochs=100, callbacks=[early_stop])
 
     # Recompile to SGD solver for regularization path
     nn.compile(optimizer=ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
@@ -57,6 +57,7 @@ def main() -> None:
     res_k = []
     res_acc = []
     res_isa = []
+    res_val = []
     B = 100
     M = 10
     eps = 0.02
@@ -64,31 +65,32 @@ def main() -> None:
     k = X_train.shape[1]
 
     # Estimate when the model starts to sparsify
-    l_test = 1
+    l_test = 1e-6
     factor = 2
     tolerance = 1e-5
     dense_weights = nn.get_weights()
-    dense_theta = dense_weights[0]
+    initial_theta = dense_weights[0]
+    dense_theta = initial_theta
     dense_W = dense_weights[1]
 
-    while not np.linalg.norm(dense_theta, ord=2) == 0:
+    while not np.sum(dense_theta) == 0:
+        dense_theta = initial_theta
         l_test = l_test * factor
         print(f"Testing lambda={l_test}")
         for _ in range(1000):
             theta_new, W_new = my_hierprox.vec_hier_prox(dense_theta, dense_W, l_test, M)
-            if np.max(np.abs(dense_theta - theta_new)) < tolerance: break
+            if np.max(np.abs(dense_theta - theta_new)) < tolerance: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    # l_test = l_test / factor
     print(f"Sparsify started at {l_test}")
-    # l = (l_test / eps) / 10
-    l = 6.5
-    # l = l_test / 10
+    l = l_test
+    # l = 100
+    # l = l_test
     
     while k > 0:
         l = (1 + eps) * l
         best_val_obj = np.inf
-        e_since_best_val = 0
+        e_since_best_val = 1
 
         for b in range(B):
             # Compute gradient of loss
@@ -113,7 +115,7 @@ def main() -> None:
             e_since_best_val += 1
             if val_obj < best_val_obj:
                 best_val_obj = val_obj
-                e_since_best_val = 0
+                e_since_best_val = 1
             
             if e_since_best_val == 10:
                 print(f"Ran for {b+1} epochs before early stopping.")
@@ -123,16 +125,20 @@ def main() -> None:
 
         k = np.shape(np.nonzero(weights[0]))[1]
         res_k.append(k)
-        res_acc.append(nn.evaluate(X_test, y_test)[1])
-        res_isa.append(nn.evaluate(X_trainv, y_trainv)[1])
-        print(f"\n\n --------------------------------------------------------------------- K = {k}, lambda = {l}, accuracy = {nn.evaluate(X_val, y_val)[1]}")
+        # res_acc.append(nn.evaluate(X_test, y_test)[1])
+        # res_isa.append(nn.evaluate(X_trainv, y_trainv)[1])
+        val_acc = nn.evaluate(X_val, y_val)[1]
+        res_val.append(val_acc)
+        print(f"\n\n --------------------------------------------------------------------- K = {k}, lambda = {l}, accuracy = {val_acc}")
         # print(np.nonzero(weights[0]))
         # print()
         # print(weights[0])
 
-    sns.lineplot(x=res_k, y=res_acc)
-    plt.show()
-    sns.lineplot(x=res_k, y=res_isa)
+    # sns.lineplot(x=res_k, y=res_acc)
+    # plt.show()
+    # sns.lineplot(x=res_k, y=res_isa)
+    # plt.show()
+    sns.lineplot(x=res_k, y=res_val)
     plt.show()
 
 if __name__ == '__main__':

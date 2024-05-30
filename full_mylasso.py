@@ -1,0 +1,208 @@
+import numpy as np
+import sklearn.datasets as skdata
+import sklearn.impute as imp
+import sklearn.preprocessing as pp
+import sklearn.metrics as met
+import keras as ks
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+
+def train_dense_model(X_train, X_val, y_train, y_val, output_size, include_bias=True, neurons=100, patience=100, epochs=1000):
+    inp = ks.layers.Input(shape=(X_train.shape[1],))
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer='l1_l2')(inp)
+    gw = ks.layers.Dense(units=neurons, activation='relu')(inp)
+    merge = ks.layers.Concatenate()([skip, gw])
+    output = ks.layers.Dense(units=output_size)(merge)
+
+    # Implement early stopping
+    early_stop = ks.callbacks.EarlyStopping(
+        monitor="val_loss",
+        min_delta=0,
+        patience=patience,
+        verbose=0,
+        mode="auto",
+        baseline=None,
+        restore_best_weights=False,
+        start_from_epoch=0,
+    )
+
+    # Initial dense training
+    nn = ks.models.Model(inputs=inp, outputs=output)
+    nn.compile(optimizer=ks.optimizers.Adam(), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+    nn.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs, callbacks=[early_stop])
+
+    return nn
+
+
+def split_data(X, y, test_frac=0.2, val_frac=0.1):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_frac)
+    X_trainv, X_val, y_trainv, y_val = train_test_split(X_train, y_train, test_size=val_frac/(1-test_frac))
+
+    return (X_trainv, X_val, X_test, y_trainv, y_val, y_test)
+
+
+def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
+    # Assert correct sizes
+    theta = theta.ravel()
+    d = theta.shape[0]
+    K = W.shape[1]
+    assert W.shape[0] == d
+
+    # Order the weights
+    sorted_W = -np.sort(-np.abs(W))
+
+    # Calculate w_m's
+    W_sum = np.cumsum(sorted_W, axis=1)
+    m = np.arange(start=1, stop=K+1)
+    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum - np.full_like(W_sum, l), 0, np.inf)
+    w_m = M / (1 + m * (M**2)) * threshold
+
+    # Check for condition
+    m_tilde_condition = np.logical_and(w_m <= sorted_W, w_m >= np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)[:,1:])
+
+    # Find the first true value per row
+    m_tilde_first_only = np.zeros_like(m_tilde_condition, dtype=bool)
+    idx = np.arange(len(m_tilde_condition)), m_tilde_condition.argmax(axis=1)
+    m_tilde_first_only[idx] = m_tilde_condition[idx]
+
+    # Set the first value of each row to true if all other values in the row are false
+    set_first_true_array = np.full_like(m_tilde_first_only, False)
+    set_first_true_array[:,0] = np.sum(m_tilde_first_only, axis=1) < 1
+    m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
+    m_tilde = w_m[m_tilde_first_only]
+
+    # Calculate output
+    theta_out = (1/M) * np.sign(theta) * m_tilde
+    W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
+
+    return (theta_out, W_out)
+
+
+def estimate_starting_lambda(weights, used_bias, M, starting_lambda = 1e-6, factor = 2, tol = 1e-5, max_iter_per_lambda = 1000, verbose=False):
+    initial_theta = weights[0]
+    dense_W = weights[2 if used_bias else 1]
+    dense_theta = initial_theta
+    l_test = starting_lambda
+
+    while not np.sum(dense_theta) == 0:
+        dense_theta = initial_theta
+        l_test = l_test * factor
+        if verbose: print(f"Testing lambda={l_test}")
+
+        for _ in range(max_iter_per_lambda):
+            theta_new, _ = hier_prox(dense_theta, dense_W, l_test, M)
+            if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
+            dense_theta = theta_new
+
+    return l_test
+
+
+def train_lasso_path(network, 
+                     used_bias, 
+                     starting_lambda, 
+                     X_train, 
+                     X_val, 
+                     y_train, 
+                     y_val, 
+                     return_train = False,
+                     lr=1e-3, 
+                     M=10, 
+                     pm=2e-2, 
+                     max_epochs_per_lambda = 100, 
+                     patience = 10, 
+                     verbose=False):
+    
+    res_k = []
+    res_theta = []
+    res_isa = []
+    res_val = []
+    l = starting_lambda / (1 + pm)
+    k = X_train.shape[1]
+
+    while k > 0:
+        l = (1 + pm) * l
+        best_val_obj = np.inf
+        e_since_best_val = 1
+
+        for b in range(max_epochs_per_lambda):
+            network.fit(X_train, y_train, verbose='0', epochs=1)
+
+            # Update using HIER-PROX
+            weights = network.get_weights()
+            theta_new, W_new = hier_prox(weights[0], weights[2 if used_bias else 1], lr*l, M)
+            weights[0] = theta_new.reshape((-1, 1))
+            weights[2 if used_bias else 1] = W_new
+            network.set_weights(weights)
+
+            val_obj = network.evaluate(X_val, y_val, verbose='0')[0]
+            e_since_best_val += 1
+            if val_obj < best_val_obj:
+                best_val_obj = val_obj
+                e_since_best_val = 1
+            
+            if e_since_best_val == patience:
+                if verbose: print(f"Ran for {b+1} epochs before early stopping.")
+                break
+
+            if b == max_epochs_per_lambda - 1 and verbose: print(f"Ran for the full {max_epochs_per_lambda} epochs.")
+
+        last_theta = network.get_weights()[0]
+        k = np.shape(np.nonzero(last_theta))[1]
+        res_k.append(k)
+        res_theta.append(last_theta)
+
+        if return_train: res_isa.append(network.evaluate(X_train, y_train)[1])
+        val_acc = network.evaluate(X_val, y_val)[1]
+        res_val.append(val_acc)
+        print(f"\n\n --------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, accuracy = {val_acc:.3f}")
+    
+    return (res_k, res_theta, res_val, res_isa)
+
+def main() -> None:
+    # Dataset parameters
+    dataset = "miceprotein"
+    n_classes = 26
+    train_frac, val_frac, test_frac = 0.7, 0.1, 0.2
+
+    # Dense network parameters
+    bias = True
+    layer_size = 100
+    max_epochs = 1000
+    dense_patience = 100
+
+    # Sparse algorithm parameters
+    starting_lambda = 1
+    estimate_lambda = True
+    sparse_patience = 10
+    print_lambda_estimation = False
+    print_sparsification = True
+
+    B = 100
+    M = 10
+    a = 1e-3
+    e = 0.02
+
+    # Load in the data
+    X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
+    print("Loaded data.")
+
+    X_full = imp.SimpleImputer().fit_transform(X_full)
+    X_full = pp.StandardScaler().fit_transform(X_full)
+    y_full = pp.LabelEncoder().fit_transform(y_full)
+    print("Cleaned data.")
+
+    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X_full, y_full, test_frac=test_frac, val_frac=val_frac)
+    print("Split data.")
+
+    nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+    nn.compile(optimizer=ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+
+    if estimate_lambda: starting_lambda = estimate_starting_lambda(nn.get_weights(), bias, M, verbose=print_lambda_estimation)
+
+    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, bias, starting_lambda, X_train, X_val, y_train, y_val, lr=a, M=M, pm=e, max_epochs_per_lambda=B, patience=sparse_patience, verbose=print_sparsification)
+
+
+if __name__ == '__main__':
+    np.random.seed(1234)
+    main()
