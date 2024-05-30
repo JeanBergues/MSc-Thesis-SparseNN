@@ -2,9 +2,7 @@ import numpy as np
 import sklearn.datasets as skdata
 import sklearn.impute as imp
 import sklearn.preprocessing as pp
-import sklearn.metrics as met
 import keras as ks
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import my_hierprox
 import matplotlib.pyplot as plt
@@ -12,11 +10,11 @@ import seaborn as sns
 
 
 def main() -> None:
-    X_full, y_full = skdata.fetch_openml(name="miceprotein", return_X_y=True)
+    X_full, y_full = skdata.fetch_openml(name="isolet", return_X_y=True)
     print(X_full.shape)
     print("Loaded data.")
 
-    X_full = imp.SimpleImputer().fit_transform(X_full)
+    # X_full = imp.SimpleImputer().fit_transform(X_full)
     X_full = pp.StandardScaler().fit_transform(X_full)
 
     y_full = pp.LabelEncoder().fit_transform(y_full)
@@ -29,9 +27,9 @@ def main() -> None:
     # Starting model, optimized with Adam
     inp = ks.layers.Input(shape=(X_train.shape[1],))
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer='l1_l2')(inp)
-    gw = ks.layers.Dense(units=int(4/3 * 77), activation='relu')(inp)
+    gw = ks.layers.Dense(units=100, activation='relu')(inp)
     merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=8)(merge)
+    output = ks.layers.Dense(units=26)(merge)
 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
@@ -64,7 +62,7 @@ def main() -> None:
     k = X_train.shape[1]
 
     # Estimate when the model starts to sparsify
-    l_test = 1
+    l_test = 1e-6
     factor = 2
     tolerance = 1e-5
     dense_weights = nn.get_weights()
@@ -74,16 +72,15 @@ def main() -> None:
     while not np.linalg.norm(dense_theta, ord=2) == 0:
         l_test = l_test * factor
         print(f"Testing lambda={l_test}")
-        for _ in range(1000):
-            theta_new, W_new = my_hierprox.vec_hier_prox(dense_theta, dense_W, l_test, M)
+        for _ in range(10000):
+            theta_new, W_new = my_hierprox.hier_prox(dense_theta, dense_W, l_test, 10)
             if np.max(np.abs(dense_theta - theta_new)) < tolerance: break
             dense_theta = theta_new
 
     # l_test = l_test / factor
     print(f"Sparsify started at {l_test}")
-    # l = (l_test / eps) / 10
-    l = 6.5
-    # l = l_test / 10
+    l = (l_test / eps) / 10
+    # l = 6.5
     
     while k > 0:
         l = (1 + eps) * l
@@ -100,12 +97,12 @@ def main() -> None:
             # # Update theta and W using losses
             # optimizer.apply_gradients(zip(gradients, nn.trainable_weights))
             # metric.update_state(y_trainv, logits)
-            nn.fit(X_trainv, y_trainv, verbose='0', epochs=1)
+            nn.fit(X_trainv, y_trainv, verbose='0')
 
             # Update using HIER-PROX
             weights = nn.get_weights()
-            theta_new, W_new = my_hierprox.vec_hier_prox(weights[0], weights[1], alpha*l, M)
-            weights[0] = theta_new.reshape((-1, 1))
+            theta_new, W_new = my_hierprox.hier_prox(weights[0], weights[1], alpha*l, M)
+            weights[0] = theta_new
             weights[1] = W_new
             nn.set_weights(weights)
 
@@ -118,8 +115,6 @@ def main() -> None:
             if e_since_best_val == 10:
                 print(f"Ran for {b+1} epochs before early stopping.")
                 break
-
-            if b == B - 1: print(f"Ran for the full {B} epochs.")
 
         k = np.shape(np.nonzero(weights[0]))[1]
         res_k.append(k)

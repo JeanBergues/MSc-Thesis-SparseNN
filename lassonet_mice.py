@@ -4,8 +4,6 @@ import sklearn.impute as imp
 import sklearn.preprocessing as pp
 import sklearn.metrics as met
 import matplotlib.pyplot as plt
-import keras as ks
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import lassonet as ln
 
@@ -22,10 +20,11 @@ def main() -> None:
     print("Cleaned data.")
 
     X_train, X_test, y_train, y_test = train_test_split(X_full, y_full, test_size=0.2)
+    X_trainv, X_val, y_trainv, y_val = train_test_split(X_train, y_train, test_size=0.125)
     print("Split data.")
 
-    lassoC = ln.LassoNetClassifier()
-    path = lassoC.path(X_train, y_train)
+    lassoC = ln.LassoNetClassifier(verbose=2)
+    path = lassoC.path(X_trainv, y_trainv, X_val=X_val, y_val=y_val)
     ln.plot_path(lassoC, path, X_test, y_test)
     plt.show()
     print("Finished training.")
