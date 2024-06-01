@@ -9,7 +9,7 @@ import lassonet as ln
 
 
 def main() -> None:
-    X_full, y_full = skdata.fetch_openml(name="miceprotein", return_X_y=True)
+    X_full, y_full = skdata.fetch_openml(name="isolet", return_X_y=True)
     print(X_full.shape)
     print("Loaded data.")
 

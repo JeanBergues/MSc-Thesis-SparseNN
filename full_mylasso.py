@@ -3,14 +3,16 @@ import sklearn.datasets as skdata
 import sklearn.impute as imp
 import sklearn.preprocessing as pp
 import sklearn.metrics as met
+import tensorflow as tf
 import keras as ks
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
+from time import perf_counter_ns
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, include_bias=True, neurons=100, patience=100, epochs=1000):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer='l1_l2')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias)(inp)
     gw = ks.layers.Dense(units=neurons, activation='relu')(inp)
     merge = ks.layers.Concatenate()([skip, gw])
     output = ks.layers.Dense(units=output_size)(merge)
@@ -106,6 +108,7 @@ def train_lasso_path(network,
                      y_train, 
                      y_val, 
                      return_train = False,
+                     train_until_k = 0,
                      lr=1e-3, 
                      M=10, 
                      pm=2e-2, 
@@ -120,22 +123,43 @@ def train_lasso_path(network,
     l = starting_lambda / (1 + pm)
     k = X_train.shape[1]
 
-    while k > 0:
-        l = (1 + pm) * l
+    while k > train_until_k:
+        l = (1 + pm) * l if k >= train_until_k else (1 - pm) * l
         best_val_obj = np.inf
         e_since_best_val = 1
+        train_time = 0
+        prox_time = 0
 
         for b in range(max_epochs_per_lambda):
-            network.fit(X_train, y_train, verbose='0', epochs=1)
+            start_train = perf_counter_ns()
+            # network.fit(X_train, y_train, verbose='0', epochs=1)
+            # Compute gradient of loss
+            with tf.GradientTape() as tape:
+                logits = network(X_train, training=True)
+                losses = ks.losses.SparseCategoricalCrossentropy(from_logits=True)(y_train, logits)
+            gradients = tape.gradient(losses, network.trainable_weights)
 
+            # Update theta and W using losses
+            ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9).apply_gradients(zip(gradients, network.trainable_weights))
+            train_time += perf_counter_ns() - start_train
+            
             # Update using HIER-PROX
             weights = network.get_weights()
+            start_prox = perf_counter_ns()
             theta_new, W_new = hier_prox(weights[0], weights[2 if used_bias else 1], lr*l, M)
             weights[0] = theta_new.reshape((-1, 1))
             weights[2 if used_bias else 1] = W_new
-            network.set_weights(weights)
+            prox_time += perf_counter_ns() - start_prox
 
-            val_obj = network.evaluate(X_val, y_val, verbose='0')[0]
+            network.set_weights(weights)
+            start_train = perf_counter_ns()
+            # val_obj = network.evaluate(X_val, y_val, verbose='0')[0]
+
+            val_logits = network(X_val, training=False)
+            val_obj = ks.losses.SparseCategoricalCrossentropy(from_logits=True)(y_val, val_logits)
+
+            train_time += perf_counter_ns() - start_train
+
             e_since_best_val += 1
             if val_obj < best_val_obj:
                 best_val_obj = val_obj
@@ -147,32 +171,37 @@ def train_lasso_path(network,
 
             if b == max_epochs_per_lambda - 1 and verbose: print(f"Ran for the full {max_epochs_per_lambda} epochs.")
 
+        print(f"Training time (ms): {train_time // 1e6}")
+        print(f"Proximal time (ms): {prox_time // 1e6}")
+
         last_theta = network.get_weights()[0]
         k = np.shape(np.nonzero(last_theta))[1]
         res_k.append(k)
         res_theta.append(last_theta)
 
-        if return_train: res_isa.append(network.evaluate(X_train, y_train)[1])
+        if return_train: res_isa.append(network.evaluate(X_train, y_train, verbose='0')[1])
         val_acc = network.evaluate(X_val, y_val)[1]
         res_val.append(val_acc)
-        print(f"\n\n --------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, accuracy = {val_acc:.3f}")
+        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, accuracy = {val_acc:.3f} \n\n")
     
     return (res_k, res_theta, res_val, res_isa)
 
 def main() -> None:
     # Dataset parameters
     dataset = "miceprotein"
-    n_classes = 26
+    n_classes = 8
+    calculate_out_of_sample_accuracy = True
     train_frac, val_frac, test_frac = 0.7, 0.1, 0.2
 
     # Dense network parameters
     bias = True
     layer_size = 100
-    max_epochs = 1000
+    max_epochs = 200
     dense_patience = 100
 
     # Sparse algorithm parameters
-    starting_lambda = 1
+    n_features = 50
+    starting_lambda = 6.5
     estimate_lambda = True
     sparse_patience = 10
     print_lambda_estimation = False
@@ -181,7 +210,7 @@ def main() -> None:
     B = 100
     M = 10
     a = 1e-3
-    e = 0.02
+    e = 0.01
 
     # Load in the data
     X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
@@ -196,11 +225,27 @@ def main() -> None:
     print("Split data.")
 
     nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+    if calculate_out_of_sample_accuracy: fm_result = nn.evaluate(X_test, y_test)
+
     nn.compile(optimizer=ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
 
     if estimate_lambda: starting_lambda = estimate_starting_lambda(nn.get_weights(), bias, M, verbose=print_lambda_estimation)
 
-    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, bias, starting_lambda, X_train, X_val, y_train, y_val, lr=a, M=M, pm=e, max_epochs_per_lambda=B, patience=sparse_patience, verbose=print_sparsification)
+    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, bias, starting_lambda, X_train, X_val, y_train, y_val, train_until_k=n_features, lr=a, M=M, pm=e, max_epochs_per_lambda=B, patience=sparse_patience, verbose=print_sparsification)
+
+    if calculate_out_of_sample_accuracy:
+        final_theta = res_theta[-1]
+        theta_mask = np.ravel(final_theta != 0)
+        print(X_train.shape)
+        X_train = X_train[:,theta_mask]
+        X_val = X_val[:,theta_mask]
+        X_test = X_test[:,theta_mask]
+        print(X_train.shape)
+
+        final_nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+        fs_result = final_nn.evaluate(X_test, y_test)
+        print(f"Final accuracy for the full model: {fm_result[1]:.3f}")
+        print(f"Final accuracy for the LassoNet selected features: {fs_result[1]:.3f}")
 
 
 if __name__ == '__main__':
