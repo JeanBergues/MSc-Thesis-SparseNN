@@ -12,8 +12,9 @@ from time import perf_counter_ns
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, include_bias=True, neurons=100, patience=100, epochs=1000):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias)(inp)
-    gw = ks.layers.Dense(units=neurons, activation='relu')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, name='skip_layer')(inp)
+    gw = ks.layers.Dense(units=neurons, activation='relu', name='gw_layer')(inp)
+    # rnn = ks.layers.Dense(units=10)(gw)
     merge = ks.layers.Concatenate()([skip, gw])
     output = ks.layers.Dense(units=output_size)(merge)
 
@@ -81,9 +82,9 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def estimate_starting_lambda(weights, used_bias, M, starting_lambda = 1e-6, factor = 2, tol = 1e-5, max_iter_per_lambda = 1000, verbose=False):
-    initial_theta = weights[0]
-    dense_W = weights[2 if used_bias else 1]
+def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-6, factor = 2, tol = 1e-5, max_iter_per_lambda = 10000, verbose=False):
+    initial_theta = theta
+    dense_W = W
     dense_theta = initial_theta
     l_test = starting_lambda
 
@@ -97,11 +98,10 @@ def estimate_starting_lambda(weights, used_bias, M, starting_lambda = 1e-6, fact
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    return l_test
+    return l_test / 10
 
 
 def train_lasso_path(network, 
-                     used_bias, 
                      starting_lambda, 
                      X_train, 
                      X_val, 
@@ -144,14 +144,19 @@ def train_lasso_path(network,
             train_time += perf_counter_ns() - start_train
             
             # Update using HIER-PROX
-            weights = network.get_weights()
             start_prox = perf_counter_ns()
-            theta_new, W_new = hier_prox(weights[0], weights[2 if used_bias else 1], lr*l, M)
-            weights[0] = theta_new.reshape((-1, 1))
-            weights[2 if used_bias else 1] = W_new
+            theta_new, W_new = hier_prox(network.get_layer('skip_layer').get_weights()[0], network.get_layer('gw_layer').get_weights()[0], lr*l, M)
+
+            new_skip_layer = network.get_layer('skip_layer').get_weights()
+            new_skip_layer[0] = theta_new.reshape((-1, 1))
+            network.get_layer('skip_layer').set_weights(new_skip_layer)
+
+            new_gw_layer = network.get_layer('gw_layer').get_weights()
+            new_gw_layer[0] = W_new
+            network.get_layer('gw_layer').set_weights(new_gw_layer)
+
             prox_time += perf_counter_ns() - start_prox
 
-            network.set_weights(weights)
             start_train = perf_counter_ns()
             # val_obj = network.evaluate(X_val, y_val, verbose='0')[0]
 
@@ -174,7 +179,7 @@ def train_lasso_path(network,
         print(f"Training time (ms): {train_time // 1e6}")
         print(f"Proximal time (ms): {prox_time // 1e6}")
 
-        last_theta = network.get_weights()[0]
+        last_theta = network.get_layer('skip_layer').get_weights()[0]
         k = np.shape(np.nonzero(last_theta))[1]
         res_k.append(k)
         res_theta.append(last_theta)
@@ -188,29 +193,29 @@ def train_lasso_path(network,
 
 def main() -> None:
     # Dataset parameters
-    dataset = "miceprotein"
-    n_classes = 8
+    dataset = "isolet"
+    n_classes = 26
     calculate_out_of_sample_accuracy = True
     train_frac, val_frac, test_frac = 0.7, 0.1, 0.2
 
     # Dense network parameters
-    bias = True
-    layer_size = 100
-    max_epochs = 200
+    bias = False
+    layer_size = 100 #int((2/3) * 617)
+    max_epochs = 1000
     dense_patience = 100
 
     # Sparse algorithm parameters
     n_features = 50
-    starting_lambda = 6.5
+    starting_lambda = 3.5
     estimate_lambda = True
     sparse_patience = 10
-    print_lambda_estimation = False
+    print_lambda_estimation = True
     print_sparsification = True
 
     B = 100
     M = 10
     a = 1e-3
-    e = 0.01
+    e = 0.02
 
     # Load in the data
     X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
@@ -229,21 +234,22 @@ def main() -> None:
 
     nn.compile(optimizer=ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
 
-    if estimate_lambda: starting_lambda = estimate_starting_lambda(nn.get_weights(), bias, M, verbose=print_lambda_estimation)
+    if estimate_lambda: starting_lambda = estimate_starting_lambda(nn.get_layer('skip_layer').get_weights()[0], nn.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda_estimation)
 
-    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, bias, starting_lambda, X_train, X_val, y_train, y_val, train_until_k=n_features, lr=a, M=M, pm=e, max_epochs_per_lambda=B, patience=sparse_patience, verbose=print_sparsification)
+    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, starting_lambda, X_train, X_val, y_train, y_val, train_until_k=n_features, lr=a, M=M, pm=e, max_epochs_per_lambda=B, patience=sparse_patience, verbose=print_sparsification)
 
     if calculate_out_of_sample_accuracy:
-        final_theta = res_theta[-1]
+        final_theta = res_theta[-1] if res_theta[-1].shape[0] == n_features else res_theta[-2]
         theta_mask = np.ravel(final_theta != 0)
-        print(X_train.shape)
-        X_train = X_train[:,theta_mask]
-        X_val = X_val[:,theta_mask]
-        X_test = X_test[:,theta_mask]
-        print(X_train.shape)
 
-        final_nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
-        fs_result = final_nn.evaluate(X_test, y_test)
+        X_train_f = X_train[:,theta_mask]
+        X_val_f = X_val[:,theta_mask]
+        X_test_f = X_test[:,theta_mask]
+
+
+        final_nn = train_dense_model(X_train_f, X_val_f, y_train, y_val, n_classes, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+
+        fs_result = final_nn.evaluate(X_test_f, y_test)
         print(f"Final accuracy for the full model: {fm_result[1]:.3f}")
         print(f"Final accuracy for the LassoNet selected features: {fs_result[1]:.3f}")
 
