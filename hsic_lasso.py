@@ -50,14 +50,12 @@ def main() -> None:
     print("Split data.")
 
     selector = hl.select.HSICSelector(X_train, y_train.reshape((-1, 1)), xfeattype=hl.select.FeatureType.CONT, yfeattype=hl.select.FeatureType.DISCR)
-    selected_features = selector.select(50, batch_size=1000, number_of_epochs=5, return_index=True)
+    selected_features = selector.select(50, batch_size=5000, number_of_epochs=10, return_index=True)
 
     print('\n\n##########################################################')
     print(
         f'The following features are relevant for the prediction of y:')
     print(f'{selected_features}')
-
-
 
     X_train_f = X_train[:,selected_features]
     X_val_f = X_val[:,selected_features]
