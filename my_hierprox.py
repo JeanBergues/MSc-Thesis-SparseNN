@@ -1,5 +1,5 @@
 import numpy as np
-import numba as nb
+# import numba as nb
 import time as tm
 
 # @nb.njit()
@@ -105,7 +105,7 @@ def vec_hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple
     m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
     m_tilde = w_m[m_tilde_first_only]
 
-    theta_out = (1/M) * np.sign(theta) * m_tilde
+    theta_out = (1/M) * (theta / np.abs(theta)) * m_tilde
     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
 
     return (theta_out, W_out)
@@ -144,3 +144,4 @@ if __name__ == '__main__':
     # x = vec_hier_prox(np.ones(d_test).reshape((-1, 1)), test_U, 0.05, 10)
     # end = tm.perf_counter()
     # print(f"First run took {end - start:.6f} ns.")
+    print(np.linalg.norm(np.array([1, -2, 3, -4, 5]).reshape((-1, 1)), ord=2))

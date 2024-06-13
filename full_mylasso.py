@@ -12,7 +12,7 @@ from time import perf_counter_ns
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, include_bias=True, neurons=100, patience=100, epochs=1000):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer='l1_l2', name='skip_layer')(inp)
     gw = ks.layers.Dense(units=neurons, activation='relu', name='gw_layer')(inp)
     # rnn = ks.layers.Dense(units=10)(gw)
     merge = ks.layers.Concatenate()([skip, gw])
@@ -58,7 +58,7 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     # Calculate w_m's
     W_sum = np.cumsum(sorted_W, axis=1)
     m = np.arange(start=1, stop=K+1)
-    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum - np.full_like(W_sum, l), 0, np.inf)
+    threshold = np.clip((np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum) - np.full_like(W_sum, l), 0, np.inf)
     w_m = (M * threshold) / (1 + m * (M**2)) 
 
     # Check for condition
@@ -206,28 +206,33 @@ def train_lasso_path(network,
     return (res_k, res_theta, res_val, res_isa)
 
 def main() -> None:
-    # Dataset parameters
-    dataset = "miceprotein"
-    n_classes = 8
-    calculate_out_of_sample_accuracy = False
-    train_frac, val_frac, test_frac = 0.7, 0.1, 0.2
+    USE_BTC_DATA = False
 
-    # Load in the data
-    X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
-    print("Loaded data.")
+    if USE_BTC_DATA:
+        print("Hoi")
+    else:
+        # Dataset parameters
+        dataset = "miceprotein"
+        n_classes = 8
+        calculate_out_of_sample_accuracy = False
+        train_frac, val_frac, test_frac = 0.7, 0.1, 0.2
 
-    X_full = imp.SimpleImputer().fit_transform(X_full)
-    X_full = pp.StandardScaler().fit_transform(X_full)
-    y_full = pp.LabelEncoder().fit_transform(y_full)
-    print("Cleaned data.")
+        # Load in the data
+        X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
+        print("Loaded data.")
 
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X_full, y_full, test_frac=test_frac, val_frac=val_frac)
-    print("Split data.")
+        X_full = imp.SimpleImputer().fit_transform(X_full)
+        X_full = pp.StandardScaler().fit_transform(X_full)
+        y_full = pp.LabelEncoder().fit_transform(y_full)
+        print("Cleaned data.")
+
+        X_train, X_val, X_test, y_train, y_val, y_test = split_data(X_full, y_full, test_frac=test_frac, val_frac=val_frac)
+        print("Split data.")
 
     # Dense network parameters
     bias            = False
-    layer_size      = int((2/3) * X_train.shape[1])
-    max_epochs      = 100
+    layer_size      = 100 # int((3/3) * X_train.shape[1])
+    max_epochs      = 1000
     dense_patience  = 100
     dense_opt       = ks.optimizers.Adam()
     loss            = ks.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -235,16 +240,16 @@ def main() -> None:
 
     # Sparse algorithm parameters
     estimate_lambda         = True
-    fast_fit                = False
+    fast_fit                = True
     fast_eval               = False
     use_best_weights        = False
-    print_lambda_estimation = False
+    print_lambda_estimation = True
     print_sparsification    = True
     plot_lambda_path        = True
 
     n_features      = 0
-    starting_lambda = 3.5
-    sparse_patience = 20
+    starting_lambda = 6.5
+    sparse_patience = 10
     B               = 100
     M               = 10
     a               = 1e-3
