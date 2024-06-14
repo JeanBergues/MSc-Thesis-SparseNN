@@ -30,7 +30,7 @@ def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, lo
         verbose=0,
         mode="auto",
         baseline=None,
-        restore_best_weights=False,
+        restore_best_weights=True,
         start_from_epoch=0,
     )
 
