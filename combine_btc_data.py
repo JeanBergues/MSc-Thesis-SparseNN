@@ -12,6 +12,7 @@ newcols = ["date"]
 for minute in range(0, minutes_per_row, minute_interval):
     for feature in value_col_names:
         newcols.append(f"{feature}_{minute}")
+newcols.append("return_hour")
 
 current_minute = 0
 new_data_list = []
@@ -21,7 +22,8 @@ for row in data.itertuples():
     # Add date to start of new row
     if current_minute == 0:
         if int(row.date.split(':')[1]) == 0:
-            current_row = [row.date] 
+            current_row = [row.date]
+            starting_price = getattr(row, "open")
         else:
             continue
 
@@ -32,6 +34,7 @@ for row in data.itertuples():
     # Update to new minute interval
     if current_minute == minutes_per_row - minute_interval:
         current_minute = 0
+        current_row.append(getattr(row, "close") - starting_price)
         new_data_list.append(current_row)
         if len(new_data_list) % 100 == 0: print(f"Finished row {len(new_data_list)}")
     else:

@@ -10,11 +10,15 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from time import perf_counter_ns
 
-def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, include_bias=True, neurons=100, patience=100, epochs=1000):
+def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, activation='relu', include_bias=True, neurons=[100], patience=100, epochs=1000, verbose=0):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer='l1_l2', name='skip_layer')(inp)
-    gw = ks.layers.Dense(units=neurons, activation='relu', name='gw_layer')(inp)
-    # rnn = ks.layers.Dense(units=10)(gw)
+    gw = ks.layers.Dense(units=neurons[0], activation=activation, name='gw_layer')(inp)
+
+    if len(neurons) > 1:
+        for K in neurons[1:]:
+            gw = ks.layers.Dense(units=K, activation=activation)(gw)   
+
     merge = ks.layers.Concatenate()([skip, gw])
     output = ks.layers.Dense(units=output_size)(merge)
 
@@ -33,7 +37,7 @@ def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, lo
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
     nn.compile(optimizer=optimizer, loss=loss_func, metrics=metrics)
-    nn.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs, callbacks=[early_stop])
+    nn.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs, callbacks=[early_stop], verbose=verbose)
 
     return nn
 
@@ -231,7 +235,7 @@ def main() -> None:
 
     # Dense network parameters
     bias            = False
-    layer_size      = 100 # int((3/3) * X_train.shape[1])
+    layer_size      = [10, 5] # int((3/3) * X_train.shape[1])
     max_epochs      = 1000
     dense_patience  = 100
     dense_opt       = ks.optimizers.Adam()
