@@ -46,38 +46,18 @@ def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=50
 
 
 def return_MLP_skip_estimator(X, y, K=[10], activation='relu', epochs=500, patience=30):
-    Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=True)
+    Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
     return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=0, patience=patience, epochs=epochs)
 
 
-def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3):
-    Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=True)
-    dense = train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
-    dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError(), metrics=['mse'])
-    starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda)
-
-    res_k, res_theta, res_val, res_isa = train_lasso_path(dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-                                                          train_until_k=0, use_faster_fit=False, lr=a, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
-                                                          patience=5, verbose=print_path, return_train=False, use_faster_eval=False)
-
-    # Plot accuracies at all points of the lasso path
-    if plot:
-        # sns.lineplot(x=np.array(res_k), y=np.array(res_isa), markers=True)
-        # plt.title("IN SAMPLE PERFORMANCE")
-        # plt.show()
-        sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
-        plt.title("VALIDATION PERFORMANCE")
-        plt.show()
-
-    return sparse
+def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10):
+    Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
+    dense = train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=0, patience=30, epochs=500)
 
 
 def main():
-    APPLY_CV            = False
-    TRAIN_FULL_MODEL    = True
-
     # Read in the data
-    full_data = pd.read_csv('btcusd_full.csv', nrows=10000)
+    full_data = pd.read_csv('btcusd_full.csv')
     dates = full_data.date
     full_data = full_data.drop(['date'], axis=1)
     full_data['target'] = np.log(full_data.close / full_data.open)
@@ -96,7 +76,7 @@ def main():
     # Apply cross-validation for finding the best settings
     kf = ms.KFold(shuffle=True)
     T = ytrain.shape[0]
-    pct_of_data_for_cv = 10 / 100
+    pct_of_data_for_cv = 5 / 100
     indices_to_use = list(range(0, T, int(1/pct_of_data_for_cv)))
     print(f"Using {len(indices_to_use)} rows for cross-validation.")
     experiment_results = {}
@@ -108,44 +88,43 @@ def main():
     # layer_sizes = [[1]]
     # activations = ['relu']
 
-    best_set = ([10], 'relu')
+    best_set = (0, 'relu')
     best_mse_till_now = np.inf
 
-    if APPLY_CV:
-        for n_ex, (K, act) in enumerate(itertools.product(layer_sizes, activations)):
-            print(f"===== - ===== Testing {K} and {act}")
-            mse_results = np.zeros(5)
+    for n_ex, (K, act) in enumerate(itertools.product(layer_sizes, activations)):
+        print(f"===== - ===== Testing {K} and {act}")
+        mse_results = np.zeros(5)
 
-            for i, (train_index, test_index) in enumerate(kf.split(Xtrain[indices_to_use], ytrain[indices_to_use])):
-                start = time.perf_counter()
-                XFtrain, yftrain = Xtrain[train_index], np.array(ytrain[train_index])
-                XFtest, yftest = np.array(Xtrain[test_index]), np.array(ytrain[test_index])
+        for i, (train_index, test_index) in enumerate(kf.split(Xtrain[indices_to_use], ytrain[indices_to_use])):
+            start = time.perf_counter()
+            XFtrain, yftrain = Xtrain[train_index], np.array(ytrain[train_index])
+            XFtest, yftest = np.array(Xtrain[test_index]), np.array(ytrain[test_index])
 
-                estimator = return_MLP_estimator(XFtrain, yftrain, K=K, activation=act)
-                ypred = estimator.predict(XFtest, verbose='0')
-                test_mse = mt.mean_squared_error(yftest, ypred)
-                mse_results[i] = test_mse
-                print(f"Training fold {i+1}/5 took {time.perf_counter() - start:.2f}s \t- mse: {test_mse:.4f}")
+            estimator = return_MLP_estimator(XFtrain, yftrain, K=K, activation=act)
+            ypred = estimator.predict(XFtest, verbose='0')
+            test_mse = mt.mean_squared_error(yftest, ypred)
+            mse_results[i] = test_mse
+            print(f"Training fold {i+1}/5 took {time.perf_counter() - start:.2f}s \t- mse: {test_mse:.4f}")
 
-            mean_mse = np.mean(mse_results)
-            print(f"MSE of {K} and {act}: {mean_mse}")
-            experiment_results[n_ex] = f"K = {K}, \tact = {act}, \tmean mse = {mean_mse:.4f}"
-            if mean_mse <= best_mse_till_now:
-                best_mse_till_now = mean_mse
-                best_set = (K, act)
+        mean_mse = np.mean(mse_results)
+        print(f"MSE of {K} and {act}: {mean_mse}")
+        experiment_results[n_ex] = f"K = {K}, \tact = {act}, \tmean mse = {mean_mse:.4f}"
+        if mean_mse <= best_mse_till_now:
+            best_mse_till_now = mean_mse
+            best_set = (K, act)
 
-        print()
-        print("Cross validation results:")
-        for ex, res in experiment_results.items():
-            print(res)
+    print()
+    print("Cross validation results:")
+    for ex, res in experiment_results.items():
+        print(res)
+    K, act = best_set
 
-    if TRAIN_FULL_MODEL:
-        K, act = best_set
-        final_model = return_LassoNet_estimator(Xtrain, ytrain, K=K, activation=act, epochs=500, patience=10, print_lambda=True, print_path=True, plot=True)
+    return
+    final_model = return_MLP_estimator(Xtrain, ytrain, K=K, activation=act, epochs=1000, patience=100)
 
-        # ypred = final_model.predict(Xtest, verbose='0')
-        # final_mse = mt.mean_squared_error(ytest, ypred)
-        # print(f"Final MSE using {K} and {act}: {final_mse}")
+    ypred = final_model.predict(Xtest, verbose='0')
+    final_mse = mt.mean_squared_error(ytest, ypred)
+    print(f"Final MSE using {K} and {act}: {final_mse}")
 
 if __name__ == '__main__':
     tf.random.set_seed(1234)
