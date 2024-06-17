@@ -30,7 +30,7 @@ def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, lo
         verbose=0,
         mode="auto",
         baseline=None,
-        restore_best_weights=False,
+        restore_best_weights=True,
         start_from_epoch=0,
     )
 
@@ -102,7 +102,7 @@ def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, to
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    return l_test / (factor**3)
+    return l_test / (factor**2)
 
 
 def train_lasso_path(network, 
