@@ -54,6 +54,7 @@ def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500,
     Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=True)
     dense = train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
     dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError(), metrics=['mse'])
+
     starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda)
 
     res_k, res_theta, res_val, res_isa = train_lasso_path(dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
@@ -69,7 +70,14 @@ def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500,
         plt.title("VALIDATION PERFORMANCE")
         plt.show()
 
-    return dense
+    final_theta = res_theta[np.argmin(res_val)]
+    theta_mask = np.ravel(final_theta != 0)
+    print(f"Selected {np.sum(theta_mask)} features.")
+
+    Xtf = Xt[:,theta_mask]
+    Xvf = Xv[:,theta_mask]
+
+    return train_dense_model(Xtf, Xvf, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
 
 
 def main():
@@ -77,20 +85,19 @@ def main():
     TRAIN_FULL_MODEL    = True
 
     # Read in the data
-    full_data = pd.read_csv('btcusd_full.csv', nrows=10000)
+    full_data = pd.read_csv('FD_btc_data_hourly.csv', nrows=1000)
     dates = full_data.date
     full_data = full_data.drop(['date'], axis=1)
-    full_data['target'] = np.log(full_data.close / full_data.open)
     print("Data has been fully loaded")
     
     n_lags = 1
 
     std_data = pp.StandardScaler().fit_transform(full_data)
-    X = np.concatenate([std_data[lag:-(n_lags-lag),:-1] for lag in range(n_lags)], axis=1)
-    y = std_data[n_lags:,-1]
+    X = np.concatenate([std_data[lag:-(n_lags-lag),:] for lag in range(n_lags)], axis=1)
+    y = std_data[n_lags:,-2]
     print(X.shape)
     print(y.shape)
-    Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X, y, test_size=0.2, shuffle=True)
+    Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X, y, test_size=0.2, shuffle=False)
     print("Data has been fully transformed and split")
 
     # Apply cross-validation for finding the best settings
@@ -141,11 +148,12 @@ def main():
 
     if TRAIN_FULL_MODEL:
         K, act = best_set
-        final_model = return_LassoNet_estimator(Xtrain, ytrain, K=K, activation=act, epochs=500, patience=10, print_lambda=True, print_path=True, plot=True)
+        # final_model = return_LassoNet_estimator(Xtrain, ytrain, K=K, activation=act, epochs=200, patience=10, print_lambda=True, print_path=True, plot=True)
+        final_model = return_MLP_skip_estimator(Xtrain, ytrain, K=K, activation=act, epochs=200, patience=20)
 
-        # ypred = final_model.predict(Xtest, verbose='0')
-        # final_mse = mt.mean_squared_error(ytest, ypred)
-        # print(f"Final MSE using {K} and {act}: {final_mse}")
+        ypred = final_model.predict(Xtest, verbose='0')
+        final_mse = mt.mean_squared_error(ytest, ypred)
+        print(f"Final MSE using {K} and {act}: {final_mse}")
 
 if __name__ == '__main__':
     tf.random.set_seed(1234)
