@@ -9,7 +9,7 @@ import lassonet as ln
 
 
 def main() -> None:
-    X_full, y_full = skdata.fetch_openml(name="isolet", return_X_y=True)
+    X_full, y_full = skdata.fetch_openml(name="miceprotein", return_X_y=True)
     print(X_full.shape)
     print("Loaded data.")
 
@@ -23,13 +23,14 @@ def main() -> None:
     X_trainv, X_val, y_trainv, y_val = train_test_split(X_train, y_train, test_size=0.125)
     print("Split data.")
 
-    lassoC = ln.LassoNetClassifier(verbose=2)
-    path = lassoC.path(X_trainv, y_trainv, X_val=X_val, y_val=y_val)
-    ln.plot_path(lassoC, path, X_test, y_test)
+    lassoC = ln.LassoNetClassifierCV(verbose=2, hidden_dims=(77,))
+    cls = lassoC.fit(X_train, y_train)
+    # path = lassoC.path(X_trainv, y_trainv, X_val=X_val, y_val=y_val)
+    # ln.plot_path(lassoC, path, X_test, y_test)
     plt.show()
     print("Finished training.")
 
-    prediction = np.argmax(lassoC.predict(X_test), axis=1)
+    prediction = cls.predict(X_test)
     print(met.accuracy_score(y_test, prediction))
 
     # Doing the tensorflow

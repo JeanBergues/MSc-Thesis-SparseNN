@@ -38,7 +38,7 @@ print("Data has been fully transformed and split")
 # fm = regressor.fit(Xtrain, ytrain)
 # print(fm.get_params(deep=True))
 
-regressor = ln.LassoNetRegressorCV(verbose=2, hidden_dims=(50,))
+regressor = ln.LassoNetRegressorCV(cv=2, verbose=2, hidden_dims=(40,10))
 regressor.fit(Xtrain, ytrain)
 print("Anders")
 
@@ -56,20 +56,6 @@ print("Anders")
 #     verbose=0,
 #     mode="auto",
 #     baseline=None,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #     restore_best_weights=True,
 #     start_from_epoch=0,
