@@ -14,7 +14,7 @@ import time as time
 from full_mylasso import train_lasso_path, train_dense_model, hier_prox, estimate_starting_lambda
 
 
-def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=500, verbose=0, optimizer=ks.optimizers.legacy.Adam(1e-3), loss_func=ks.losses.MeanSquaredError(), metrics=['mse']):
+def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=500, verbose=0, optimizer=ks.optimizers.Adam(1e-3), loss_func=ks.losses.MeanSquaredError(), metrics=['mse']):
     Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
     inp = ks.layers.Input(shape=(Xt.shape[1],))
     gw = ks.layers.Dense(units=K[0], activation=activation)(inp)
@@ -45,9 +45,9 @@ def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=50
     return nn
 
 
-def return_MLP_skip_estimator(X, y, K=[10], activation='relu', epochs=500, patience=30):
+def return_MLP_skip_estimator(X, y, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
-    return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=0, patience=patience, epochs=epochs)
+    return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=verbose, patience=patience, epochs=epochs)
 
 
 def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3):
@@ -59,7 +59,7 @@ def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500,
 
     res_k, res_theta, res_val, res_isa = train_lasso_path(dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
                                                           train_until_k=0, use_faster_fit=False, lr=a, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
-                                                          patience=5, verbose=print_path, return_train=False, use_faster_eval=False)
+                                                          patience=10, verbose=print_path, return_train=False, use_faster_eval=False)
 
     # Plot accuracies at all points of the lasso path
     if plot:
@@ -77,7 +77,9 @@ def return_LassoNet_estimator(X, y, K=[10], activation='relu', M=10, epochs=500,
     Xtf = Xt[:,theta_mask]
     Xvf = Xv[:,theta_mask]
 
-    return train_dense_model(Xtf, Xvf, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
+    return_model = train_dense_model(Xtf, Xvf, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
+
+    return (return_model, theta_mask)
 
 
 def main():
@@ -85,7 +87,7 @@ def main():
     TRAIN_FULL_MODEL    = True
 
     # Read in the data
-    full_data = pd.read_csv('FD_btc_data_hourly.csv', nrows=1000)
+    full_data = pd.read_csv('FD_btc_data_hourly.csv')
     dates = full_data.date
     full_data = full_data.drop(['date'], axis=1)
     print("Data has been fully loaded")
@@ -115,7 +117,7 @@ def main():
     # layer_sizes = [[1]]
     # activations = ['relu']
 
-    best_set = ([10], 'relu')
+    best_set = ([30], 'relu')
     best_mse_till_now = np.inf
 
     if APPLY_CV:
@@ -148,12 +150,15 @@ def main():
 
     if TRAIN_FULL_MODEL:
         K, act = best_set
-        # final_model = return_LassoNet_estimator(Xtrain, ytrain, K=K, activation=act, epochs=200, patience=10, print_lambda=True, print_path=True, plot=True)
-        final_model = return_MLP_skip_estimator(Xtrain, ytrain, K=K, activation=act, epochs=200, patience=20)
+        final_model, mask = return_LassoNet_estimator(Xtrain, ytrain, K=K, activation=act, epochs=500, patience=30, print_lambda=True, print_path=True, plot=True)
+        Xtest = Xtest[:,mask]
+        # final_model = return_MLP_skip_estimator(Xtrain, ytrain, K=K, activation=act, epochs=500, patience=30, verbose=1)
 
         ypred = final_model.predict(Xtest, verbose='0')
         final_mse = mt.mean_squared_error(ytest, ypred)
-        print(f"Final MSE using {K} and {act}: {final_mse}")
+        print(f"Final MSE using {K} and {act} Vanilla MLP: 2.1329")
+        print(f"Final MSE using {K} and {act} Skipped MLP: 2.1168")
+        print(f"Final MSE using {K} and {act} LassoNetted: 2.0961")
 
 if __name__ == '__main__':
     tf.random.set_seed(1234)

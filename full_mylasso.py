@@ -12,7 +12,7 @@ from time import perf_counter_ns
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, activation='relu', include_bias=True, neurons=[100], patience=100, epochs=1000, verbose=0):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer='l1_l2', name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer=ks.regularizers.L1L2(), name='skip_layer')(inp)
     gw = ks.layers.Dense(units=neurons[0], activation=activation, name='gw_layer')(inp)
 
     if len(neurons) > 1:
