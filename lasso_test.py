@@ -38,9 +38,9 @@ print("Data has been fully transformed and split")
 # fm = regressor.fit(Xtrain, ytrain)
 # print(fm.get_params(deep=True))
 
-# regressor = ln.LassoNetRegressorCV(verbose=2, hidden_dims=(50,))
-# regressor.fit(Xtrain, ytrain)
-# print("Anders")
+regressor = ln.LassoNetRegressorCV(cv=2, verbose=2, hidden_dims=(40,10))
+regressor.fit(Xtrain, ytrain)
+print("Anders")
 
 # Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=0.1, shuffle=True)
 # inp = ks.layers.Input(shape=(Xt.shape[1],))
@@ -56,20 +56,6 @@ print("Data has been fully transformed and split")
 #     verbose=0,
 #     mode="auto",
 #     baseline=None,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #     restore_best_weights=True,
 #     start_from_epoch=0,
