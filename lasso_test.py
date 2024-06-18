@@ -35,8 +35,8 @@ print("Data has been fully transformed and split")
 # Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X, y, test_size=0.2, shuffle=True)
 # print("Data has been fully transformed and split")
 
-# regressor = sklm.LassoCV(cv=2)
-# fm = regressor.fit(Xtrain, ytrain)
+regressor = sklm.LassoCV(cv=2)
+fm = regressor.fit(Xtrain, ytrain)
 
 regressor = ln.LassoNetRegressorCV(cv=2, verbose=2, hidden_dims=(30,))
 regressor.fit(Xtrain, ytrain)

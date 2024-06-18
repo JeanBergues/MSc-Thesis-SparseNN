@@ -45,6 +45,7 @@ def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=50
     return nn
 
 
+
 def return_MLP_skip_estimator(X, y, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
     return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=verbose, patience=patience, epochs=epochs)
