@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 full_df = pd.read_csv('btcusd_full.csv', parse_dates=['date'])
