@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 full_data = pd.read_csv('btcusd_full.csv')
 dates = full_data.date
@@ -13,3 +14,4 @@ print("Data has been fully loaded")
 
 sns.pairplot(base_data)
 plt.savefig('full_sd_corr.png')
+
