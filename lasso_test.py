@@ -12,7 +12,7 @@ import lassonet as ln
 import keras as ks
 
 # Read in the data
-full_data = pd.read_csv('FD_btc_data_hourly.csv', nrows=22000)
+full_data = pd.read_csv('FD_btc_data_hourly.csv')
 dates = full_data.date
 full_data = full_data.drop(['date'], axis=1)
 print("Data has been fully loaded")

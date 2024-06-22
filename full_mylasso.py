@@ -103,7 +103,7 @@ def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, to
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    return l_test * factor
+    return l_test / 10
 
 
 def train_lasso_path(network, 
@@ -124,7 +124,8 @@ def train_lasso_path(network,
                      pm=2e-2, 
                      max_epochs_per_lambda = 100, 
                      patience = 10, 
-                     verbose=False):
+                     verbose=False,
+                     early_val_stop=False):
     
     res_k = []
     res_theta = []
@@ -212,7 +213,7 @@ def train_lasso_path(network,
         
         print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.2f}, accuracy = {val_acc:.6f} \n\n")
 
-        if k !=  X_train.shape[1] and val_acc < 0.5 * prev_obj: 
+        if k <  X_train.shape[1]/2 and val_acc < 0.5 * prev_obj and early_val_stop: 
             break
         else:
             prev_obj = val_acc  

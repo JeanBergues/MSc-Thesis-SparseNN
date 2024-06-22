@@ -135,26 +135,17 @@ def return_MLP_drp(X1, y1, K=[10], activation='relu', epochs=500, verbose=0, opt
 
 ###############################################################################################################################################################################################
 
-day_df = pd.read_csv('agg_btc_day.csv', parse_dates=['date', 'ddate'])
-hour_df = pd.read_csv('agg_btc_hour.csv', parse_dates=['date', 'ddate'])
 min_df = pd.read_csv('agg_btc_min.csv', parse_dates=['date', 'ddate', 'hdate'])
 
-d_nlags = 7
-h_nlags = 24   
-m_nlags = 12
+m_nlags = 12 * 2
 # h_nlags = d_nlags * 24
 # m_nlags = h_nlags * 12
 
-y_raw = day_df.close.pct_change(1)[np.max([d_nlags, h_nlags//24, m_nlags//(24*12)]) + 1:].to_numpy().reshape(-1, 1)
+y_raw = min_df.close.pct_change(1)[m_nlags:].to_numpy().reshape(-1, 1)
+min_np = min_df.to_numpy()[:,2:-2]
+min_np = np.concatenate([min_np, ((min_np[:,3] / min_np[:,0]) - 1).reshape((-1, 1))], axis=1)
 
-Xlist = np.zeros((len(y_raw), 7*(d_nlags + h_nlags + m_nlags)))
-for i, day in enumerate(day_df.ddate[np.max([d_nlags, h_nlags//24, m_nlags//(24*12)]):-1]):
-    appending = []
-    if d_nlags > 0: appending.append(day_df[day_df.ddate <= day].tail(d_nlags).iloc[:, 1:-2].to_numpy().ravel())
-    if h_nlags > 0: appending.append(hour_df[hour_df.ddate <= day].tail(h_nlags).iloc[:, 1:-2].to_numpy().ravel())
-    if m_nlags > 0: appending.append(min_df[min_df.ddate <= day].tail(m_nlags).iloc[:, 2:-2].to_numpy().ravel())
-    
-    Xlist[i] = np.concatenate(appending)
+Xlist = np.concatenate([min_np[lag:-(m_nlags-lag)] for lag in range(m_nlags)], axis=1)
 
 if True:
     X_pp = pp.MinMaxScaler().fit(Xlist)
@@ -172,28 +163,22 @@ Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_si
 print("Data has been fully transformed and split")
 
 # # LASSO
-predictor = return_lassoCV_estimor(Xtrain, ytrain, cv=5, max_iter=5_000)
+predictor = return_lassoCV_estimor(Xtrain, ytrain, cv=5, max_iter=1_000)
 lasso_mask = np.ravel(predictor.coef_ != 0)
 n_selected = int(np.sum(lasso_mask))
 print(f"LASSO selected {n_selected} features")
-print(f"LASSO selected {int(np.sum(lasso_mask[0:7*d_nlags]))} features from daily data")
-print(f"LASSO selected {int(np.sum(lasso_mask[7*d_nlags : 7*d_nlags + 7*h_nlags]))} features from houry data")
-print(f"LASSO selected {int(np.sum(lasso_mask[7*d_nlags + 7*h_nlags :]))} features from minty data")
 Xtrain = Xtrain[:,lasso_mask]
 Xtest = Xtest[:,lasso_mask]
 
 # Paper LassoNet
-nn = lsn.LassoNetRegressor(hidden_dims=(30, 15, 5), verbose=2)
-nn.fit(Xtrain, ytrain)
+# nn = lsn.LassoNetRegressor(hidden_dims=(30, 15, 5), verbose=2)
+# nn.fit(Xtrain, ytrain)
 
 # # # # # My LassoNetw
-mask = return_LassoNet_mask(Xtrain, ytrain, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=100, print_lambda=True, print_path=True, plot=True, nfeat=0)
-print(f"LASSONET selected {int(np.sum(mask))} features")
-print(f"LASSONET selected {int(np.sum(mask[0 : 7*d_nlags]))} features from daily data")
-print(f"LASSONET selected {int(np.sum(mask[7*d_nlags : 7*d_nlags + 7*h_nlags]))} features from houry data")
-print(f"LASSONET selected {int(np.sum(mask[7*d_nlags + 7*h_nlags :]))} features from minty data")
-Xtrain = Xtrain[:,mask]
-Xtest = Xtest[:,mask]
+# mask = return_LassoNet_mask(Xtrain, ytrain, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=100, print_lambda=True, print_path=True, plot=True, nfeat=0)
+# print(f"LASSONET selected {int(np.sum(mask))} features")
+# Xtrain = Xtrain[:,mask]
+# Xtest = Xtest[:,mask]
 
 # # Regular MLPs 0.604
 n_repeats = 1
@@ -201,13 +186,13 @@ results = np.zeros(n_repeats)
 ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
 for i in range(n_repeats):
-    # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
-    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=300, drop=0, shuff=False)
+    # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=1_000)
+    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=20, drop=0, shuff=False)
 
     ypred = predictor.predict(Xtest).ravel()
     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
     print(f"Finished experiment {i+1}")
-    print(f"MSE: {mt.mean_squared_error(ytest, ypred):.6f}")
+    print(f"MSE: {100_000*mt.mean_squared_error(ytest, ypred):.3f}")
     results[i] = mt.mean_squared_error(ytest, ypred)
 
     x_axis = list(range(len(ytest.ravel())))
@@ -218,7 +203,7 @@ for i in range(n_repeats):
 
 
 print(f"Ran {n_repeats} experiments:")
-print(f"Average MSE: {1000*np.mean(results):.3f}")
-print(f"STD of MSE: {1000*np.std(results):.3f}")
+print(f"Average MSE: {100_000*np.mean(results):.3f}")
+print(f"STD of MSE: {100_000*np.std(results):.3f}")
 ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-print(f"Only mean MSE: {1000*mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+print(f"Only mean MSE: {100_000*mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")

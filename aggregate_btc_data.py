@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 
 
-full_df = pd.read_csv('btcusd_full.csv', parse_dates=['date'])
-frequency = 'd'
+full_df = pd.read_csv('it_btc_data.csv', parse_dates=['date'])
+frequency = 'h'
 
 full_df['filter_date'] = full_df.date.dt.floor(freq=frequency)
 
