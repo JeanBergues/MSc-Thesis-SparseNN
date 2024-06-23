@@ -138,25 +138,22 @@ def return_MLP_drp(X1, y1, K=[10], activation='relu', epochs=500, verbose=0, opt
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
 day_df = pd.read_csv(f'agg_btc_day{extra}.csv', parse_dates=['date', 'ddate'])
-hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
-min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
+# hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
+# min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
 
-d_nlags = 7
-h_nlags = 7   
-m_nlags = 7
+d_nlags = 30
+# h_nlags = 7   
+# m_nlags = 7
 # h_nlags = d_nlags * 24
 # m_nlags = h_nlags * 12
 
-y_raw = day_df.close.pct_change(1)[np.max([d_nlags, h_nlags//24, m_nlags//(24*12)]) + 1:].to_numpy().reshape(-1, 1)
+raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
+Xlist = raw_returns[0:-d_nlags].reshape(-1, 1)
+if d_nlags > 1:
+    for t in range(1, d_nlags):
+        Xlist = np.concatenate([Xlist, raw_returns[t:-d_nlags+t].reshape(-1, 1)], axis=1)
+y_raw = raw_returns[d_nlags:].reshape(-1, 1)
 
-Xlist = np.zeros((len(y_raw), 7*(d_nlags + h_nlags + m_nlags)))
-for i, day in enumerate(day_df.ddate[np.max([d_nlags, h_nlags//24, m_nlags//(24*12)]):-1]):
-    appending = []
-    if d_nlags > 0: appending.append(day_df[day_df.ddate <= day].tail(d_nlags).iloc[:, 1:-2].to_numpy().ravel())
-    if h_nlags > 0: appending.append(hour_df[hour_df.ddate <= day].tail(h_nlags).iloc[:, 1:-2].to_numpy().ravel())
-    if m_nlags > 0: appending.append(min_df[min_df.ddate <= day].tail(m_nlags).iloc[:, 2:-2].to_numpy().ravel())
-    
-    Xlist[i] = np.concatenate(appending)
 
 if True:
     X_pp = pp.MinMaxScaler().fit(Xlist)
@@ -169,6 +166,7 @@ else:
     yvoortest = y_raw
 
 Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=0.2, shuffle=False)
+
 # print(Xtest[:3][:,3])
 # print(yvoortest[:3])
 print("Data has been fully transformed and split")
@@ -189,13 +187,13 @@ print("Data has been fully transformed and split")
 # nn.fit(Xtrain, ytrain)
 
 # # # # # My LassoNetw
-# mask = return_LassoNet_mask(Xtrain, ytrain, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=100, print_lambda=True, print_path=True, plot=True, nfeat=0)
-# print(f"LASSONET selected {int(np.sum(mask))} features")
+mask = return_LassoNet_mask(Xtrain, ytrain, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=50, print_lambda=True, print_path=True, plot=True, nfeat=12)
+print(f"LASSONET selected {int(np.sum(mask))} features")
 # print(f"LASSONET selected {int(np.sum(mask[0 : 7*d_nlags]))} features from daily data")
 # print(f"LASSONET selected {int(np.sum(mask[7*d_nlags : 7*d_nlags + 7*h_nlags]))} features from houry data")
 # print(f"LASSONET selected {int(np.sum(mask[7*d_nlags + 7*h_nlags :]))} features from minty data")
-# Xtrain = Xtrain[:,mask]
-# Xtest = Xtest[:,mask]
+Xtrain = Xtrain[:,mask]
+Xtest = Xtest[:,mask]
 
 # # Regular MLPs 0.604
 n_repeats = 1
@@ -203,8 +201,8 @@ results = np.zeros(n_repeats)
 ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
 for i in range(n_repeats):
-    predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=2_000)
-    # predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=100, drop=0, shuff=False)
+    # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=2_000)
+    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 15, 5], activation='tanh', epochs=20_000, patience=200, drop=0, shuff=True)
 
     ypred = predictor.predict(Xtest).ravel()
     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()

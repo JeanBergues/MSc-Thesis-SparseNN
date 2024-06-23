@@ -12,3 +12,6 @@ agg_btc_hour.csv
 agg_btc_day.csv
 agg_btc_min.csv
 it_btc_data.csv
+agg_btc_day_old.csv
+agg_btc_hour_old.csv
+agg_btc_min_old.csv

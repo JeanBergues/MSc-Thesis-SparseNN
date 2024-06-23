@@ -103,7 +103,7 @@ def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, to
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    return l_test / 10
+    return l_test
 
 
 def train_lasso_path(network, 
