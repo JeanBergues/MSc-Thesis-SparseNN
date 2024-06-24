@@ -16,18 +16,19 @@ import sklearn.linear_model as sklm
 
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
-day_df = pd.read_csv(f'agg_btc_min{extra}.csv', usecols=['close'])
+day_df = pd.read_csv(f'btcusd_full{extra}.csv', usecols=['open', 'close'], nrows=400_000)
 # old_df = pd.read_csv(f'agg_btc_day_old.csv', parse_dates=['date', 'ddate'])
 # hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 # min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
 
 close_prices = day_df.close.to_numpy().ravel()
+open_prices = day_df.open.to_numpy().ravel()
 y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1)
-yvoortest = y_raw * 100
+yvoortest = y_raw
 
-print(arch.unitroot.ADF(yvoortest).summary())
-print(arch.unitroot.PhillipsPerron(yvoortest).summary())
-print(arch.unitroot.KPSS(yvoortest).summary())
+# print(arch.unitroot.ADF(yvoortest).summary())
+# print(arch.unitroot.PhillipsPerron(yvoortest).summary())
+# print(arch.unitroot.KPSS(yvoortest).summary())
 
 # y_raw = np.clip(y_raw, np.mean(y_raw) - np.std(y_raw), np.mean(y_raw) + np.std(y_raw))
 # y_pp = pp.StandardScaler().fit(y_raw)
@@ -65,17 +66,37 @@ for l in options_l:
     for p in options_p:
         for q in options_q:
             for o in options_o:
-                model = arch.univariate.ARCHInMean(y=yvoortest, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
+                model = arch.univariate.ARCHInMean(y=yvoortest, constant=True, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
                 # model = arch.arch_model(y=yvoortest, x=X, mean='constant', lags=l, vol='GARCH', p=p, o=o, q=q)
+                # model = arch.arch_model(y=yvoortest, mean='AR', lags=l, vol='GARCH', p=p, o=o, q=q)
                 predictor = model.fit(last_obs=len(ytrain), disp=False)
-                lm_test_res = predictor.arch_lm_test()
-                print(lm_test_res.null)
-                print(lm_test_res.pval)
-                # predictor = model.fit(disp=False)
+                train_vol = predictor._volatility[~np.isnan(predictor._volatility)]
+                print(len(ytrain))
                 print(predictor.summary())
+                params = predictor.params
 
-                ypred = predictor.forecast(start=len(ytrain)).mean.to_numpy()
+                mu, rho, nu, omega, alpha, gamma, beta, tau = params
+
+                ypred = np.zeros(len(ytest) + 1)
+                ypred[0] = ytrain[-1]
+                volst = np.zeros(len(ytest) + 1)
+                volst[0] = train_vol[-1]
+                ytest = np.insert(ytest, 0, ytrain[-1])
+                for t in range(1, len(ypred)):
+                    volst[t] = np.sqrt( omega + (alpha + gamma * (1 if ypred[t-1] < 0 else 0)) * (ypred[t-1] - ytest[t-1])**2 + beta * (volst[t-1]**2) )
+                    ypred[t] = mu + nu * np.log(volst[t]**2) + rho * ytest[t-1]
+                    if np.isnan(volst[t]): break
+
+                # lm_test_res = predictor.arch_lm_test()
+                # print(lm_test_res.null)
+                # print(lm_test_res.pval)
+                # predictor = model.fit(disp=False)
+                # print(predictor.summary())
+
+                # ypred = predictor.forecast(start=len(ytrain)).mean.to_numpy()
                 # ypred = y_pp.inverse_transform(np.array(ypred.mean.to_numpy()).reshape(-1, 1)).ravel()
+                ypred = ypred[1:].ravel()
+                ytest = ytest[1:].ravel()
                 mse = mt.mean_squared_error(ytest, ypred)
                 print(f"Finished experiment l={l}, p={p}, o={o}, q={q}")
                 print(f"MSE: {mse:.6f}")
@@ -91,9 +112,9 @@ for l in options_l:
                 # # sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
                 # plt.show()
 
-print(f"Best config: {best_config} with MSE = {lowest_mse:.6f}")
+print(f"Best config: {best_config} with MSE = {1000*lowest_mse:.6f}")
 # ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+print(f"Only mean MSE: {1000*mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
 
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
@@ -101,5 +122,5 @@ sns.lineplot(x=x_axis, y=best_pred.ravel(), color='red')
 # y_old = old_df.close.pct_change()[1:].to_numpy().reshape(-1, 1)
 # _, yold = ms.train_test_split(y_old, test_size=0.2, shuffle=False)
 # sns.lineplot(x=x_axis, y=yold.ravel(), color='red')
-# sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
+sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
 plt.show()
