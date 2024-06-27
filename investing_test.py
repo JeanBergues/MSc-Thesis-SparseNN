@@ -10,40 +10,34 @@ import itertools as itertools
 import time as time
 import lassonet as ln
 
-full_data = pd.read_csv('FD_btc_data_hourly.csv')
-dates = full_data.date
-full_data = full_data.drop(['date'], axis=1)
+full_data = pd.read_csv(f'agg_btc_day.csv', usecols=['open', 'close'])
+close_prices = full_data.close.to_numpy().ravel()
+open_prices = full_data.open.to_numpy().ravel()
+y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1)
+# dates = full_data.date
+ytrain, ytest = ms.train_test_split(y_raw, test_size=0.2, shuffle=False)
 print("Data has been fully loaded")
 
-hold_return = (full_data.iloc[-1].close_55 / full_data.iloc[0].open_0 - 1) * 100
-starting_funds = 10_000
-total_funds = 10_000
-hype_data = [0]
-hype_horizon = 5
-current_strat = 0
+use_forecast = 'lassonet'
+forecast = np.load(f'forecasts/{use_forecast}.npy')
+invest = 10_000
+hold = 10_000
+ytest = ytest[1:]
+investing_results = np.zeros(len(ytest))
+holding_results = np.zeros(len(ytest))
+last_strat = 1
 
 # Hype based strategy
-for row in full_data.itertuples():
-    print(f"Actualized return this hour: {row.return_hourly*100:.2f}%")
-    print()
-    total_funds = total_funds * (1 + current_strat * row.return_hourly)
+for t in range(len(ytest)):
+    strat = 1
+    if forecast[t] < 0:
+        strat = -1
+    invest = invest * (1 + strat * ytest[t])
+    investing_results[t] = invest
+    hold = hold * (1 + ytest[t])
+    holding_results[t] = hold
 
-    # When to bet
-    if row.totalTrades_hour > np.mean(hype_data) + np.std(hype_data) / np.sqrt(len(hype_data)):
-        current_strat = 1
-    # When to short
-    elif row.totalTrades_hour < np.mean(hype_data) - np.std(hype_data) / np.sqrt(len(hype_data)):
-        current_strat = -1
-    # When to stay
-    else:
-        current_strat = 0
-
-    if len(hype_data) < hype_horizon:
-        hype_data = hype_data + [row.totalTrades_hour]
-    else:
-        hype_data = hype_data[1:] + [row.totalTrades_hour]
-
-    print(f"Hype of {int(row.totalTrades_hour)} against average of {int(np.mean(hype_data))}: selected strat: {current_strat}")
-    print(f"Total funds = {total_funds:.0f}. Total return = {(total_funds / starting_funds - 1) * 100:.2f}%")
-
-print(f"Hold from start returns: {hold_return:.2f}%")
+x_axis = list(range(len(ytest.ravel())))
+sns.lineplot(x=x_axis, y=holding_results, color='black')
+sns.lineplot(x=x_axis, y=investing_results, color='red')
+plt.show()

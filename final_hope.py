@@ -138,28 +138,41 @@ def return_MLP_drp(X1, y1, K=[10], activation='relu', epochs=500, verbose=0, opt
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
 day_df = pd.read_csv(f'agg_btc_day{extra}.csv', parse_dates=['date', 'ddate'])
+hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 # old_day_df = pd.read_csv(f'agg_btc_day_old.csv', parse_dates=['date', 'ddate'])
 # day_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 # min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
-
-d_nlags = 2
-# h_nlags = 7   
+d_nlags = 1
+h_nlags = 6   
 # m_nlags = 7
 # h_nlags = d_nlags * 24
 # m_nlags = h_nlags * 12
 
 # raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
 raw_returns = np.log(day_df.close[1:].to_numpy()) - np.log(day_df.close[:-1].to_numpy())
+low_returns = np.log(day_df.low[1:].to_numpy()) - np.log(day_df.low[:-1].to_numpy())
+raw_hour_returns = np.log(hour_df.close[1:].to_numpy()) - np.log(hour_df.close[:-1].to_numpy())
+low_hour_returns = np.log(hour_df.low[1:].to_numpy()) - np.log(hour_df.low[:-1].to_numpy())
 # old_returns = old_day_df.close.pct_change(1)[1:].to_numpy()
 # varfrac = ((day_df.high - day_df.low) / ((day_df.close + day_df.open) / 2))[1:].to_numpy()
 varfrac = ((day_df.high - day_df.low)**2)[1:].to_numpy()
 Xlist = raw_returns[d_nlags-1:-1].reshape(-1, 1)
 Xlist = np.concatenate(
     [
-        Xlist, 
+        Xlist,
+        low_returns[d_nlags-1:-1].reshape(-1, 1),
         # old_returns[d_nlags-1:-1].reshape(-1, 1),
-        varfrac[d_nlags-1:-1].reshape(-1, 1)
+        # varfrac[d_nlags-1:-1].reshape(-1, 1)
     ], axis=1)
+
+if h_nlags > 0:
+    for t_h in range(0, h_nlags):
+                    Xlist = np.concatenate(
+                        [
+                            Xlist,
+                            raw_hour_returns[(d_nlags*24-1-t_h):(-1-t_h):24].reshape(-1, 1),
+                            low_hour_returns[(d_nlags*24-1-t_h):(-1-t_h):24].reshape(-1, 1),
+                        ], axis=1)
 
 if d_nlags > 1:
     for t in range(1, d_nlags):
@@ -168,8 +181,9 @@ if d_nlags > 1:
                 Xlist,
                 # day_df.close.pct_change(t+1)[d_nlags:-1].to_numpy().reshape(-1, 1),
                 raw_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
+                low_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
                 # old_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
-                varfrac[d_nlags-1-t:-1-t].reshape(-1, 1)
+                # varfrac[d_nlags-1-t:-1-t].reshape(-1, 1)
             ], axis=1)
         
 y_raw = raw_returns[d_nlags:].reshape(-1, 1)
@@ -221,7 +235,7 @@ ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
 for i in range(n_repeats):
     # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=2_000)
-    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[20, 10], activation='relu', epochs=20_000, patience=50, drop=0, shuff=True)
+    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 10, 5], activation='relu', epochs=20_000, patience=50, drop=0, shuff=True)
 
     ypred = predictor.predict(Xtest).ravel()
     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
@@ -234,6 +248,8 @@ for i in range(n_repeats):
     sns.lineplot(x=x_axis, y=ypred.ravel(), color='red')
     sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
     plt.show()
+
+    np.save('forecasts/lassonet', ypred.ravel())
 
 
 print(f"Ran {n_repeats} experiments:")

@@ -16,7 +16,8 @@ import sklearn.linear_model as sklm
 
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
-day_df = pd.read_csv(f'btcusd_full{extra}.csv', usecols=['open', 'close'], nrows=400_000)
+# day_df = pd.read_csv(f'btcusd_full{extra}.csv', usecols=['open', 'close'])
+day_df = pd.read_csv(f'agg_btc_day{extra}.csv', usecols=['open', 'close'])
 # old_df = pd.read_csv(f'agg_btc_day_old.csv', parse_dates=['date', 'ddate'])
 # hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 # min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
@@ -24,7 +25,7 @@ day_df = pd.read_csv(f'btcusd_full{extra}.csv', usecols=['open', 'close'], nrows
 close_prices = day_df.close.to_numpy().ravel()
 open_prices = day_df.open.to_numpy().ravel()
 y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1)
-yvoortest = y_raw
+yvoortest = y_raw * 10
 
 # print(arch.unitroot.ADF(yvoortest).summary())
 # print(arch.unitroot.PhillipsPerron(yvoortest).summary())
@@ -66,25 +67,27 @@ for l in options_l:
     for p in options_p:
         for q in options_q:
             for o in options_o:
-                model = arch.univariate.ARCHInMean(y=yvoortest, constant=True, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
-                # model = arch.arch_model(y=yvoortest, x=X, mean='constant', lags=l, vol='GARCH', p=p, o=o, q=q)
-                # model = arch.arch_model(y=yvoortest, mean='AR', lags=l, vol='GARCH', p=p, o=o, q=q)
-                predictor = model.fit(last_obs=len(ytrain), disp=False)
-                train_vol = predictor._volatility[~np.isnan(predictor._volatility)]
-                print(len(ytrain))
-                print(predictor.summary())
-                params = predictor.params
+                # model = arch.univariate.ARCHInMean(y=yvoortest, constant=True, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
+                # # model = arch.arch_model(y=yvoortest, x=X, mean='constant', lags=l, vol='GARCH', p=p, o=o, q=q)
+                # # model = arch.arch_model(y=yvoortest, mean='AR', lags=l, vol='GARCH', p=p, o=o, q=q)
+                # predictor = model.fit(last_obs=len(ytrain), disp=False)
+                # train_vol = predictor._volatility[~np.isnan(predictor._volatility)]
+                # print(len(ytrain))
+                # print(predictor.summary())
+                # params = predictor.params
 
-                mu, rho, nu, omega, alpha, gamma, beta, tau = params
+                # mu, rho, nu, omega, alpha, gamma, beta, tau = params
+                mu, rho, nu, omega, alpha, gamma, beta, tau = (-0.0002694225, -0.1447727567,  0.0033313652,  0.0002908547,  0.0788820283,  0.9124067161,  0.0154225190,  4.4431714435)
 
                 ypred = np.zeros(len(ytest) + 1)
                 ypred[0] = ytrain[-1]
                 volst = np.zeros(len(ytest) + 1)
-                volst[0] = train_vol[-1]
+                volst[0] = 0.03790113
                 ytest = np.insert(ytest, 0, ytrain[-1])
                 for t in range(1, len(ypred)):
                     volst[t] = np.sqrt( omega + (alpha + gamma * (1 if ypred[t-1] < 0 else 0)) * (ypred[t-1] - ytest[t-1])**2 + beta * (volst[t-1]**2) )
-                    ypred[t] = mu + nu * np.log(volst[t]**2) + rho * ytest[t-1]
+                    # ypred[t] = mu + nu * np.log(volst[t]**2) + rho * ytest[t-1]
+                    ypred[t] = mu + nu * volst[t]**2 + rho * ytest[t-1]
                     if np.isnan(volst[t]): break
 
                 # lm_test_res = predictor.arch_lm_test()
@@ -119,8 +122,14 @@ print(f"Only mean MSE: {1000*mt.mean_squared_error(ytest, np.full_like(ytest, np
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
 sns.lineplot(x=x_axis, y=best_pred.ravel(), color='red')
+plt.show()
+
+sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
+sns.lineplot(x=x_axis, y=volst[1:].ravel(), color='red')
+plt.show()
+
+np.save('forecasts/garch', best_pred)
 # y_old = old_df.close.pct_change()[1:].to_numpy().reshape(-1, 1)
 # _, yold = ms.train_test_split(y_old, test_size=0.2, shuffle=False)
 # sns.lineplot(x=x_axis, y=yold.ravel(), color='red')
-sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
-plt.show()
+# sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')

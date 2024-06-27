@@ -17,3 +17,4 @@ agg_btc_hour_old.csv
 agg_btc_min_old.csv
 .RData
 .Rhistory
+forecasts
