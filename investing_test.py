@@ -18,10 +18,10 @@ y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1,
 ytrain, ytest = ms.train_test_split(y_raw, test_size=0.2, shuffle=False)
 print("Data has been fully loaded")
 
-use_forecast = 'lassonet'
+use_forecast = 'garch'
 forecast = np.load(f'forecasts/{use_forecast}.npy')
-invest = 10_000
-hold = 10_000
+invest = 1
+hold = 1
 ytest = ytest[1:]
 investing_results = np.zeros(len(ytest))
 holding_results = np.zeros(len(ytest))

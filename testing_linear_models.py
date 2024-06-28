@@ -25,7 +25,7 @@ day_df = pd.read_csv(f'agg_btc_day{extra}.csv', usecols=['open', 'close'])
 close_prices = day_df.close.to_numpy().ravel()
 open_prices = day_df.open.to_numpy().ravel()
 y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1)
-yvoortest = y_raw * 10
+yvoortest = y_raw * 100
 
 # print(arch.unitroot.ADF(yvoortest).summary())
 # print(arch.unitroot.PhillipsPerron(yvoortest).summary())
@@ -54,10 +54,10 @@ ytrain, ytest = ms.train_test_split(yvoortest, test_size=0.2, shuffle=False)
 print("Data has been fully transformed and split")
 
 # # Regular MLPs 0.604
-options_q = [1]
-options_o = [1]
-options_p = [1]
-options_l = [1]
+options_q = [1, 2, 3]
+options_o = [1, 2, 3]
+options_p = [1, 2, 3, 4]
+options_l = [0, 1]
 # ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 best_pred = np.zeros_like(ytest)
 lowest_mse = np.inf
@@ -67,22 +67,23 @@ for l in options_l:
     for p in options_p:
         for q in options_q:
             for o in options_o:
-                # model = arch.univariate.ARCHInMean(y=yvoortest, constant=True, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
-                # # model = arch.arch_model(y=yvoortest, x=X, mean='constant', lags=l, vol='GARCH', p=p, o=o, q=q)
-                # # model = arch.arch_model(y=yvoortest, mean='AR', lags=l, vol='GARCH', p=p, o=o, q=q)
-                # predictor = model.fit(last_obs=len(ytrain), disp=False)
-                # train_vol = predictor._volatility[~np.isnan(predictor._volatility)]
-                # print(len(ytrain))
-                # print(predictor.summary())
-                # params = predictor.params
+                model = arch.univariate.ARCHInMean(y=yvoortest, constant=True, lags=l, volatility=arch.univariate.GARCH(p=p, o=o, q=q), form='log', distribution=arch.univariate.distribution.StudentsT())
+                # model = arch.arch_model(y=yvoortest, x=X, mean='constant', lags=l, vol='GARCH', p=p, o=o, q=q)
+                # model = arch.arch_model(y=yvoortest, mean='AR', lags=l, vol='GARCH', p=p, o=o, q=q)
+                predictor = model.fit(last_obs=len(ytrain), disp=False)
+                train_vol = predictor._volatility[~np.isnan(predictor._volatility)]
+                print(len(ytrain))
+                print(predictor.summary())
+                params = predictor.params
 
-                # mu, rho, nu, omega, alpha, gamma, beta, tau = params
-                mu, rho, nu, omega, alpha, gamma, beta, tau = (-0.0002694225, -0.1447727567,  0.0033313652,  0.0002908547,  0.0788820283,  0.9124067161,  0.0154225190,  4.4431714435)
+                mu, rho, nu, omega, alpha, gamma, beta, tau = params
+                # mu, rho, nu, omega, alpha, gamma, beta, tau = (-0.0002694225, -0.1447727567,  0.0033313652,  0.0002908547,  0.0788820283,  0.9124067161,  0.0154225190,  4.4431714435)
 
                 ypred = np.zeros(len(ytest) + 1)
                 ypred[0] = ytrain[-1]
                 volst = np.zeros(len(ytest) + 1)
-                volst[0] = 0.03790113
+                volst[0] = train_vol[-1]
+                # volst[0] = 0.03790113
                 ytest = np.insert(ytest, 0, ytrain[-1])
                 for t in range(1, len(ypred)):
                     volst[t] = np.sqrt( omega + (alpha + gamma * (1 if ypred[t-1] < 0 else 0)) * (ypred[t-1] - ytest[t-1])**2 + beta * (volst[t-1]**2) )
@@ -115,9 +116,9 @@ for l in options_l:
                 # # sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
                 # plt.show()
 
-print(f"Best config: {best_config} with MSE = {1000*lowest_mse:.6f}")
+print(f"Best config: {best_config} with MSE = {lowest_mse:.6f}")
 # ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-print(f"Only mean MSE: {1000*mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
+print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
 
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')

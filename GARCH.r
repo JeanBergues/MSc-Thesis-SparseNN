@@ -1,62 +1,117 @@
 library(readr)
 library(rugarch)
 
-df <- read.csv('agg_btc_min.csv')
+df <- read.csv('agg_btc_day.csv')
 #hour_data <- read.csv('agg_btc_hour.csv')
 #min_data <- read.csv('agg_btc_min.csv')
 
+calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015) {
+  T <- length(real)
+  budget <- start_v
+  path <- numeric(T)
+  prev_strat = 1
+  
+  lt <- mean(frc) - sd(frc)
+  ut <- mean(frc) + sd(frc)
+  
+  for (t in 1:T) {
+    strategy <- prev_strat
+    if (frc[t] < lt) {
+      strategy <- -1
+    } else if (frc[t] > ut) {
+      strategy <- 1
+    }
+    
+    if (strategy != prev_strat) {
+      budget <- budget * (1 - t_cost)
+    }
+    prev_strat <- strategy
+    budget <- budget * (1 + real[t]/100 * strategy)
+    path[t] <- budget
+  }
+  return (list(ret=((budget - start_v) / start_v), path=path))
+}
+
 # Actually perform GARCH estimation
 rdf <- 100 * diff(df$close)/df$close[-length(df$close)]
-split <- floor(0.2 * length(rdf))
-rtr <- rdf[1:split]
+split <- 365
+val <- 100
+
+rtr <- rdf[1:(length(rdf)-split - val)]
+rva <- rdf[(val+1):split]
+rtf <- rdf[1:split]
 rts <- rdf[(length(rdf)-split+1):length(rdf)]
 
-spec <- ugarchspec(
-  variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)),
-  mean.model = list(armaOrder = c(1, 0), include.mean = TRUE, archm = TRUE),
-  distribution.model = "std"
-)
+best_mse <- 1e10
+best_p <- 0
+best_o <- 0
+best_q <- 0
+best_a <- 0
+best_b <- 0
 
-model <- ugarchfit(
-  data=rdf,
-  out.sample = split,
-  spec=spec
-)
+try_p <- 4:6
+try_o <- 0:2
+try_q <- 3:5
+try_a <- 1:2
+try_b <- 0:1
 
-forc_results <- ugarchforecast(model, n.ahead=split)
-forc <- as.numeric(fitted(forc_results))
+estimate_garch_model <- function(yt, yv, p, o, q, a, b) {
+  spec <- ugarchspec(
+    variance.model = list(model = "gjrGARCH", garchOrder = c(p, o, q)),
+    mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE),
+    distribution.model = "std"
+  )
+  
+  model <- ugarchfit(
+    data=yt,
+    out.sample = length(yv),
+    spec=spec
+  )
+  
+  forc_results <- ugarchforecast(model, n.ahead=length(yv))
+  forc <- as.numeric(fitted(forc_results))
+  
+  mse <- (1/length(yv)) * sum((yv - forc)^2)
+  r <- calc_invest_return(forc, yv)
+  
+  return (list(r=r, mse=mse, forc=forc))
+}
+
+for (p in try_p) {
+  for (o in try_o) {
+    for (q in try_q) {
+      for (a in try_a) {
+        for (b in try_b) {
+          result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
+          
+          if (result$mse < best_mse) {
+            best_mse <- result$mse
+            best_p <- p
+            best_o <- o
+            best_q <- q
+            best_a <- a
+            best_b <- b
+          }
+          
+          print(result$mse)
+        }
+      }
+    }
+  }
+}
+
 
 # Compare against predicting mean
-p <- plot.new()
-plot(rts, type='l', col='black')
-lines(forc, type='l', col='red')
-print((1/split) * sum((rts - forc)^2))
+fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b)
+
+print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
 
+budget_mse_dev <- calc_invest_return(fm$forc, rts)$path
+holding_dev <- calc_invest_return(rep(1, length(rts)), rts)$path
 
-# Simulate investments
-budget <- 10000
-holding <- 10000
-budget_dev <- numeric(split)
-holding_dev <- numeric(split)
-prev_strat = 1
-transaction_cost = 0
+plot(rts, type='l', col='black')
+lines(fm$forc, type='l', col='red')
 
-for (t in 1:split) {
-  strategy <- 1
-  if (forc[t] < 0) {
-    strategy <- -1
-  }
-  
-  if (strategy != prev_strat) {
-    budget <- budget * (1 - transaction_cost)
-  }
-  prev_strat <- strategy
-  budget <- budget * (1 + rts[t]/100 * strategy)
-  budget_dev[t] <- budget
-  holding <- holding * (1 + rts[t]/100)
-  holding_dev[t] <- holding
-}
-p <- plot.new()
-plot(holding_dev, type='l', col='black', ylim=c(min(budget_dev, holding_dev), max(budget_dev, holding_dev)))
-lines(budget_dev, type='l', col='red')
+plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev), max(budget_mse_dev, holding_dev)))
+lines(budget_mse_dev, type='l', col='red')

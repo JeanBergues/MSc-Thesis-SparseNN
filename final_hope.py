@@ -137,60 +137,51 @@ def return_MLP_drp(X1, y1, K=[10], activation='relu', epochs=500, verbose=0, opt
 
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
-day_df = pd.read_csv(f'agg_btc_day{extra}.csv', parse_dates=['date', 'ddate'])
-hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
-# old_day_df = pd.read_csv(f'agg_btc_day_old.csv', parse_dates=['date', 'ddate'])
-# day_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
-# min_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate', 'hdate'])
-d_nlags = 1
-h_nlags = 6   
+day_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
+hour_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate'])
+
+d_nlags = 0
+h_nlags = 25
+freq = 24
+bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
+
 # m_nlags = 7
 # h_nlags = d_nlags * 24
 # m_nlags = h_nlags * 12
 
 # raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
-raw_returns = np.log(day_df.close[1:].to_numpy()) - np.log(day_df.close[:-1].to_numpy())
+raw_returns = (day_df.close[1:].to_numpy() / day_df.close[:-1].to_numpy() - 1) * 100
+y_raw = raw_returns[bound_lag:].reshape(-1, 1)
+
 low_returns = np.log(day_df.low[1:].to_numpy()) - np.log(day_df.low[:-1].to_numpy())
-raw_hour_returns = np.log(hour_df.close[1:].to_numpy()) - np.log(hour_df.close[:-1].to_numpy())
+# trad_returns = np.log(day_df.tradesDone[1:].to_numpy()) - np.log(day_df.tradesDone[:-1].to_numpy())
+raw_hour_returns = (hour_df.close[1:].to_numpy() / hour_df.close[:-1].to_numpy() - 1) * 100
 low_hour_returns = np.log(hour_df.low[1:].to_numpy()) - np.log(hour_df.low[:-1].to_numpy())
 # old_returns = old_day_df.close.pct_change(1)[1:].to_numpy()
 # varfrac = ((day_df.high - day_df.low) / ((day_df.close + day_df.open) / 2))[1:].to_numpy()
 varfrac = ((day_df.high - day_df.low)**2)[1:].to_numpy()
-Xlist = raw_returns[d_nlags-1:-1].reshape(-1, 1)
-Xlist = np.concatenate(
-    [
-        Xlist,
-        low_returns[d_nlags-1:-1].reshape(-1, 1),
-        # old_returns[d_nlags-1:-1].reshape(-1, 1),
-        # varfrac[d_nlags-1:-1].reshape(-1, 1)
-    ], axis=1)
+Xlist = np.zeros(len(y_raw)).reshape(-1, 1)
 
 if h_nlags > 0:
     for t_h in range(0, h_nlags):
-                    Xlist = np.concatenate(
-                        [
-                            Xlist,
-                            raw_hour_returns[(d_nlags*24-1-t_h):(-1-t_h):24].reshape(-1, 1),
-                            low_hour_returns[(d_nlags*24-1-t_h):(-1-t_h):24].reshape(-1, 1),
-                        ], axis=1)
+        Xlist = np.concatenate(
+            [
+                Xlist,
+                # raw_hour_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                raw_hour_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+            ], axis=1)
 
-if d_nlags > 1:
-    for t in range(1, d_nlags):
+if d_nlags > 0:
+    for t in range(0, d_nlags):
         Xlist = np.concatenate(
             [
                 Xlist,
                 # day_df.close.pct_change(t+1)[d_nlags:-1].to_numpy().reshape(-1, 1),
-                raw_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
-                low_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
+                raw_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                # low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                 # old_returns[d_nlags-1-t:-1-t].reshape(-1, 1),
                 # varfrac[d_nlags-1-t:-1-t].reshape(-1, 1)
             ], axis=1)
-        
-y_raw = raw_returns[d_nlags:].reshape(-1, 1)
-
-# print(Xlist)
-# print(y_raw)
-# 1/0
 
 X_pp = pp.MinMaxScaler().fit(Xlist)
 y_pp = pp.MinMaxScaler().fit(y_raw)
@@ -235,7 +226,7 @@ ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
 for i in range(n_repeats):
     # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=2_000)
-    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[30, 10, 5], activation='relu', epochs=20_000, patience=50, drop=0, shuff=True)
+    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[80, 40, 20], activation='relu', epochs=20_000, patience=10, drop=0, shuff=True)
 
     ypred = predictor.predict(Xtest).ravel()
     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
@@ -245,15 +236,14 @@ for i in range(n_repeats):
 
     x_axis = list(range(len(ytest.ravel())))
     sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
-    sns.lineplot(x=x_axis, y=ypred.ravel(), color='red')
     sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
+    sns.lineplot(x=x_axis, y=ypred.ravel(), color='red')
     plt.show()
 
-    np.save('forecasts/lassonet', ypred.ravel())
-
+    np.save('forecasts/lassonetday', ypred.ravel())
 
 print(f"Ran {n_repeats} experiments:")
-print(f"Average MSE: {1000*np.mean(results):.3f}")
-print(f"STD of MSE: {1000*np.std(results):.3f}")
+print(f"Average MSE: {np.mean(results):.6f}")
+print(f"STD of MSE: {np.std(results):.6f}")
 ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-print(f"Only mean MSE: {1000*mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
