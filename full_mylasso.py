@@ -87,7 +87,7 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 10000, verbose=False):
+def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 10000, verbose=False, divide_result = 1):
     initial_theta = theta
     dense_W = W
     dense_theta = initial_theta
@@ -103,7 +103,33 @@ def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, to
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
 
-    return l_test
+    return l_test / divide_result
+
+
+def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad_cost=0.0015):
+    value = start_val
+    path = np.zeros(len(real))
+    prev_pos = 1
+
+    lb = np.mean(forecast) - np.std(forecast)
+    ub = np.mean(forecast) + np.std(forecast)
+
+    for t, (f, r) in enumerate(zip(forecast, real)):
+        pos = prev_pos
+        if f < lb:
+            pos = 1
+        elif f > ub:
+            pos = -1
+        else:
+            pos = 0 if allow_empty else prev_pos
+
+        if pos != prev_pos: value = value * (1 - trad_cost)
+        prev_pos = pos
+
+        value = value * (1 + pos * r/100)
+        path[t] = value
+
+    return (value / start_val - 1, path)
 
 
 def train_lasso_path(network, 
@@ -125,12 +151,14 @@ def train_lasso_path(network,
                      max_epochs_per_lambda = 100, 
                      patience = 10, 
                      verbose=False,
-                     early_val_stop=False):
+                     early_val_stop=False,
+                     use_invest_results=False):
     
     res_k = []
     res_theta = []
     res_isa = []
     res_val = []
+    res_r = []
     l = starting_lambda / (1 + pm)
     k = X_train.shape[1]
     prev_obj = 0
@@ -210,15 +238,19 @@ def train_lasso_path(network,
 
         val_acc = network.evaluate(X_val, y_val)[1]
         res_val.append(val_acc)
+
+        forecast = network.predict(X_val)
+        val_r, _ = calc_investment_returns(forecast, y_val, trad_cost=0)
+        res_r.append(val_r[0])
         
-        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.2f}, accuracy = {val_acc:.6f} \n\n")
+        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.1f}, MSE = {val_acc:.6f}, r = {val_r[0]:.3f} \n\n")
 
         if k <  X_train.shape[1]/2 and val_acc < 0.5 * prev_obj and early_val_stop: 
             break
         else:
             prev_obj = val_acc  
     
-    return (res_k, res_theta, res_val, res_isa)
+    return (res_k, res_theta, res_val, res_isa, res_r)
 
 def main() -> None:
     USE_BTC_DATA = False

@@ -10,32 +10,49 @@ import itertools as itertools
 import time as time
 import lassonet as ln
 
-full_data = pd.read_csv(f'agg_btc_day.csv', usecols=['open', 'close'])
+def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad_cost=0.0015):
+    value = start_val
+    path = np.zeros(len(real))
+    prev_pos = 1
+
+    lb = np.mean(forecast) - np.std(forecast)
+    ub = np.mean(forecast) + np.std(forecast)
+
+    for t, (f, r) in enumerate(zip(forecast, real)):
+        pos = prev_pos
+        if f < lb:
+            pos = 1
+        elif f > ub:
+            pos = -1
+        else:
+            pos = 0 if allow_empty else prev_pos
+
+        if pos != prev_pos: value = value * (1 - trad_cost)
+        prev_pos = pos
+
+        value = value * (1 + pos * r/100)
+        path[t] = value
+
+    return (value / start_val - 1, path)
+
+full_data = pd.read_csv(f'agg_btc_hour.csv', usecols=['close'])
 close_prices = full_data.close.to_numpy().ravel()
-open_prices = full_data.open.to_numpy().ravel()
-y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1)
+y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1) * 100
 # dates = full_data.date
 ytrain, ytest = ms.train_test_split(y_raw, test_size=0.2, shuffle=False)
 print("Data has been fully loaded")
 
-use_forecast = 'garch'
+use_forecast = 'LassoHour'
 forecast = np.load(f'forecasts/{use_forecast}.npy')
-invest = 1
-hold = 1
-ytest = ytest[1:]
-investing_results = np.zeros(len(ytest))
-holding_results = np.zeros(len(ytest))
-last_strat = 1
+ytest = ytest[0:]
+
+print(len(forecast))
+print(len(ytest))
+assert len(forecast) == len(ytest)
 
 # Hype based strategy
-for t in range(len(ytest)):
-    strat = 1
-    if forecast[t] < 0:
-        strat = -1
-    invest = invest * (1 + strat * ytest[t])
-    investing_results[t] = invest
-    hold = hold * (1 + ytest[t])
-    holding_results[t] = hold
+fret, investing_results = calc_investment_returns(forecast, ytest, trad_cost=0)
+hret, holding_results = calc_investment_returns(np.ones_like(ytest), ytest, trad_cost=0)
 
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=holding_results, color='black')
