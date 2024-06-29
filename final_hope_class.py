@@ -29,12 +29,10 @@ def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad
 
     for t, (f, r) in enumerate(zip(forecast, real)):
         pos = prev_pos
-        if f < lb:
-            pos = 1
-        elif f > ub:
+        if f == 0:
             pos = -1
-        else:
-            pos = 0 if allow_empty else prev_pos
+        elif f == 1:
+            pos = 1
 
         if pos != prev_pos: value = value * (1 - trad_cost)
         prev_pos = pos
@@ -79,7 +77,7 @@ def plot_paper_lassonet(X1, y1, K=(10,), verbose=0, n_features=0, pm=1.02, M=10)
 
 def return_MLP_skip_estimator(X1, y1, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0, shuff=False):
     Xt, Xv, yt, yv = ms.train_test_split(X1, y1, test_size=0.1, shuffle=shuff)
-    return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanAbsoluteError(), ['mse'], activation=activation, neurons=K, verbose=verbose, patience=patience, epochs=epochs, drop=drop)
+    return train_dense_model(Xt, Xv, yt, yv, 2, ks.optimizers.Adam(1e-3), ks.losses.SparseCategoricalCrossentropy(), ['accuracy'], activation=activation, neurons=K, verbose=verbose, patience=patience, epochs=epochs, drop=drop)
 
 
 def return_LassoNet_mask(X1, y1, K=[10], activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3, nfeat=0):
@@ -91,7 +89,7 @@ def return_LassoNet_mask(X1, y1, K=[10], activation='relu', M=10, epochs=500, pa
 
     res_k, res_theta, res_val, res_isa, res_r = train_lasso_path(dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
                                                           train_until_k=nfeat, use_faster_fit=False, lr=a, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
-                                                          patience=10, verbose=print_path, return_train=False, use_faster_eval=False, early_val_stop=False, use_invest_results=True)
+                                                          patience=10, verbose=print_path, return_train=False, use_faster_eval=False, early_val_stop=False, use_invest_results=False)
 
     # Plot accuracies at all points of the lasso path
     if plot:
@@ -173,7 +171,7 @@ extra = '_old' if USE_OLD_DATA else ''
 day_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 hour_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate'])
 
-d_nlags = 20
+d_nlags = 10
 h_nlags = 20
 freq = 12
 bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
@@ -195,7 +193,7 @@ vol_h_returns =   ((hour_df.volume[1:].to_numpy() - hour_df.volume[:-1].to_numpy
 volNot_h_returns =((hour_df.volumeNotional[1:].to_numpy() - hour_df.volumeNotional[:-1].to_numpy()) / hour_df.volumeNotional[:-1].to_numpy()) * 100
 trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].to_numpy()) / hour_df.tradesDone[:-1].to_numpy()) * 100
 
-y_raw = close_returns[bound_lag:].reshape(-1, 1)
+y_raw = close_returns[bound_lag:].reshape(-1, 1) >= 0
 Xlist = np.arange(1, len(y_raw) + 1).reshape(-1, 1)
 if h_nlags > 0:
     for t_h in range(0, h_nlags):
@@ -204,7 +202,7 @@ if h_nlags > 0:
                 Xlist,
                 # open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                 # high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                # low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                 close_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                 # vol_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                 # volNot_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
@@ -217,7 +215,7 @@ if d_nlags > 0:
                 Xlist,
                 # open_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                 # high_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                # low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                 close_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                 # vol_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                 # volNot_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
@@ -226,12 +224,13 @@ if d_nlags > 0:
 
 Xlist = Xlist[:, 1:]
 X_pp = pp.MinMaxScaler().fit(Xlist)
-y_pp = pp.MinMaxScaler().fit(y_raw)
+y_pp = pp.LabelEncoder().fit(y_raw.ravel())
 Xvoortest = X_pp.transform(Xlist)
-yvoortest = y_pp.transform(y_raw)
+yvoortest = y_pp.transform(y_raw.ravel())
 
 Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=0.2, shuffle=False)
 print("Data has been fully transformed and split")
+
 
 # LASSO
 # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=100_000)
@@ -245,11 +244,11 @@ print("Data has been fully transformed and split")
 # Xtest = Xtest[:,lasso_mask]
 
 # # # Paper LassoNet
-ln_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=(40, 20, 10), verbose=2, n_features=10, pm=1.01) != 0)
-n_selected = int(np.sum(ln_mask))
-print(f"LassoNet selected {n_selected} features")
-Xtrain = Xtrain[:,ln_mask]
-Xtest = Xtest[:,ln_mask]
+# ln_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=(40, 20, 10), verbose=2, n_features=10, pm=1.01) != 0)
+# n_selected = int(np.sum(ln_mask))
+# print(f"LassoNet selected {n_selected} features")
+# Xtrain = Xtrain[:,ln_mask]
+# Xtest = Xtest[:,ln_mask]
 
 # # My LassoNetw
 # mask = return_LassoNet_mask(Xtrain, ytrain, K=[20, 10], activation='relu', epochs=20_000, patience=25, print_lambda=True, print_path=True, plot=True, nfeat=int(Xtrain.shape[1] * 0.15))
@@ -261,30 +260,25 @@ Xtest = Xtest[:,ln_mask]
 
 n_repeats = 1
 results = np.zeros(n_repeats)
-ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
 for i in range(n_repeats):
     # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
-    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[40, 20, 10], activation='tanh', epochs=20_000, patience=50, drop=0, shuff=False)
+    predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=[20, 5], activation='tanh', epochs=20_000, patience=20, drop=0, shuff=True)
     # lnr = lsn.LassoNetRegressorCV(cv=ms.TimeSeriesSplit(n_splits=5), hidden_dims=(50, 20), verbose=2, path_multiplier=1.01)
     # predictor = lnr.fit(Xtrain, ytrain)
+    
 
-    ypred = predictor.predict(Xtest).ravel()
-    ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
+    ypred = np.argmax(predictor.predict(Xtest), axis=1)
     print(f"Finished experiment {i+1}")
-    print(f"MSE: {mt.mean_squared_error(ytest, ypred):.6f}")
-    results[i] = mt.mean_squared_error(ytest, ypred)
-
-    x_axis = list(range(len(ytest.ravel())))
-    sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
-    sns.lineplot(x=x_axis, y=ytest.ravel() - ypred.ravel(), color='blue')
-    sns.lineplot(x=x_axis, y=ypred.ravel(), color='red')
-    plt.show()
-
-    np.save('forecasts/temp', ypred.ravel())
+    print(f"Predicted true {np.sum(ypred) / len(ypred)}")
+    print(f"ACC: {mt.accuracy_score(ytest, ypred):.4f}")
+    print(calc_investment_returns(ypred, close_returns[-len(ytest):].ravel())[0])
+    results[i] = mt.accuracy_score(ytest, ypred)
 
 print(f"Ran {n_repeats} experiments:")
-print(f"Average MSE: {np.mean(results):.6f}")
-print(f"STD of MSE: {np.std(results):.6f}")
-ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
+print(f"Average ACC: {np.mean(results):.4f}")
+print(f"STD of ACC: {np.std(results):.4f}")
+maj_acc = mt.mean_squared_error(ytest, np.full_like(ytest, True))
+print(f"Only true ACC: {max(maj_acc, 1-maj_acc):.4f}")
+# ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
+# print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.6f}")
