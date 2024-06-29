@@ -44,16 +44,15 @@ def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad
 
     return (value / start_val - 1, path)
 
-full_data = pd.read_csv(f'agg_btc_hour.csv', usecols=['close'])
+full_data = pd.read_csv(f'agg_btc_day.csv', usecols=['close'])
 close_prices = full_data.close.to_numpy().ravel()
 y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1, 1) * 100
 # dates = full_data.date
-ytrain, ytest = ms.train_test_split(y_raw, test_size=0.2, shuffle=False)
+ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
 print("Data has been fully loaded")
 
-use_forecast = 'temp'
+use_forecast = 'tempTestDay'
 forecast = np.load(f'forecasts/{use_forecast}.npy')
-ytest = ytest[4:]
 
 print(len(forecast))
 print(len(ytest))
@@ -63,10 +62,12 @@ assert len(forecast) == len(ytest)
 fret, investing_results = calc_investment_returns(forecast, ytest, trad_cost=0, use_thresholds=False)
 hret, holding_results = calc_investment_returns(np.ones_like(ytest), ytest, trad_cost=0, use_thresholds=False)
 sret, shorting_results = calc_investment_returns(-1*np.ones_like(ytest), ytest, trad_cost=0, use_thresholds=False)
+oret, optimal_results = calc_investment_returns(ytest, ytest, trad_cost=0, use_thresholds=False)
 
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=holding_results, color='black')
 sns.lineplot(x=x_axis, y=shorting_results, color='blue')
+# sns.lineplot(x=x_axis, y=optimal_results, color='green')
 sns.lineplot(x=x_axis, y=investing_results, color='red')
 plt.show()
 

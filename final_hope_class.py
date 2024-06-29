@@ -168,11 +168,11 @@ def return_MLP_drp(X1, y1, K=[10], activation='relu', epochs=500, verbose=0, opt
 
 USE_OLD_DATA = False
 extra = '_old' if USE_OLD_DATA else ''
-day_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
-hour_df = pd.read_csv(f'agg_btc_min{extra}.csv', parse_dates=['date', 'ddate'])
+day_df = pd.read_csv(f'agg_btc_day{extra}.csv', parse_dates=['date', 'ddate'])
+hour_df = pd.read_csv(f'agg_btc_hour{extra}.csv', parse_dates=['date', 'ddate'])
 
-d_nlags = 10
-h_nlags = 20
+d_nlags = 2
+h_nlags = 1
 freq = 12
 bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
 
@@ -228,7 +228,7 @@ y_pp = pp.LabelEncoder().fit(y_raw.ravel())
 Xvoortest = X_pp.transform(Xlist)
 yvoortest = y_pp.transform(y_raw.ravel())
 
-Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=0.2, shuffle=False)
+Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=365, shuffle=False)
 print("Data has been fully transformed and split")
 
 
