@@ -5,14 +5,19 @@ df <- read.csv('agg_btc_day.csv')
 #hour_data <- read.csv('agg_btc_hour.csv')
 #min_data <- read.csv('agg_btc_min.csv')
 
-calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015) {
+calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_threshold=TRUE) {
   T <- length(real)
   budget <- start_v
   path <- numeric(T)
   prev_strat = 1
   
-  lt <- mean(frc) - sd(frc)
-  ut <- mean(frc) + sd(frc)
+  if (use_threshold) {
+    lt <- mean(frc) - sd(frc)
+    ut <- mean(frc) + sd(frc)
+  } else {
+    lt <- 0
+    ut <- 0
+  }
   
   for (t in 1:T) {
     strategy <- prev_strat
@@ -49,13 +54,13 @@ best_q <- 0
 best_a <- 0
 best_b <- 0
 
-try_p <- 4:6
+try_p <- 1:3
 try_o <- 0:2
-try_q <- 3:5
-try_a <- 1:2
-try_b <- 0:1
+try_q <- 0:3
+try_a <- 0:0
+try_b <- 0:0
 
-estimate_garch_model <- function(yt, yv, p, o, q, a, b) {
+estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   spec <- ugarchspec(
     variance.model = list(model = "gjrGARCH", garchOrder = c(p, o, q)),
     mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE),
@@ -67,6 +72,8 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b) {
     out.sample = length(yv),
     spec=spec
   )
+  
+  if (summ) {print(summary(model))}
   
   forc_results <- ugarchforecast(model, n.ahead=length(yv))
   forc <- as.numeric(fitted(forc_results))
@@ -102,16 +109,18 @@ for (p in try_p) {
 
 
 # Compare against predicting mean
-fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b)
+fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
 
 print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
 
 budget_mse_dev <- calc_invest_return(fm$forc, rts)$path
 holding_dev <- calc_invest_return(rep(1, length(rts)), rts)$path
+shorting_dev <- calc_invest_return(rep(-1, length(rts)), rts)$path
 
 plot(rts, type='l', col='black')
 lines(fm$forc, type='l', col='red')
 
-plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev), max(budget_mse_dev, holding_dev)))
+plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, shorting_dev), max(budget_mse_dev, holding_dev, shorting_dev)))
 lines(budget_mse_dev, type='l', col='red')
+print("DONE")

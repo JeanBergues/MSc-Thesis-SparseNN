@@ -34,14 +34,19 @@ split_train_test <- function (data_df, factor) {
   return(list(train=train, trainf=trainf, val=val, test=test))
 }
 
-calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015) {
+calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_threshold=TRUE) {
   T <- length(real)
   budget <- start_v
   path <- numeric(T)
   prev_strat = 1
   
-  lt <- mean(frc) - sd(frc)
-  ut <- mean(frc) + sd(frc)
+  if (use_threshold) {
+    lt <- mean(frc) - sd(frc)
+    ut <- mean(frc) + sd(frc)
+  } else {
+    lt <- 0
+    ut <- 0
+  }
   
   for (t in 1:T) {
     strategy <- prev_strat
@@ -61,17 +66,17 @@ calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015) {
   return (list(ret=((budget - start_v) / start_v), path=path))
 }
 
-day_ret <- calc_pct_diffs(hour_data)
-hour_ret <- calc_pct_diffs(min_data, start_col = 3)
+day_ret <- calc_pct_diffs(day_data)
+hour_ret <- calc_pct_diffs(hour_data, start_col = 2)
 #min_ret <- calc_pct_diffs(min_data, start_col=3)
 
-split_day_data <- split_train_test(day_ret, factor=24)
+split_day_data <- split_train_test(day_ret, factor=1)
 day_train <- split_day_data$train
 day_trainf <- split_day_data$trainf
 day_val <- split_day_data$val
 day_test <- split_day_data$test
 
-split_hour_data <- split_train_test(hour_ret, factor=12*24)
+split_hour_data <- split_train_test(hour_ret, factor=24)
 hour_train <- split_hour_data$train
 hour_trainf <- split_hour_data$trainf
 hour_val <- split_hour_data$val
@@ -81,16 +86,16 @@ hour_test <- split_hour_data$test
 #min_train <- split_min_data$train
 #min_test <- split_min_data$test
 
-estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=1, summ=FALSE, freq=12) {
+estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=1, summ=FALSE, freq=24) {
   midas_model = midas_r(
-    y ~ #trend 
-      #+ fmls(x1, hlag, freq) 
-      #+ fmls(x2, hlag, freq) 
-      #fmls(x3, hlag, freq)
-      fmls(x4, hlag, freq) 
-      #+ fmls(x5, hlag, freq) 
-      #+ fmls(x6, hlag, freq) 
-      #+ fmls(x7, hlag, freq)
+    y ~ trend 
+      + fmls(x1, hlag, freq) 
+      + fmls(x2, hlag, freq) 
+      + fmls(x3, hlag, freq)
+      + fmls(x4, hlag, freq) 
+      + fmls(x5, hlag, freq) 
+      + fmls(x6, hlag, freq) 
+      + fmls(x7, hlag, freq)
       ,
     data = list(
       y=Xt_day$close[2:length(Xt_day$close)], 
@@ -122,11 +127,14 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
   
   mse <- (1/length(Xv_day$close)) * sum((Xv_day$close - midas_forecast$mean)^2)
   rt <- calc_invest_return(midas_forecast$mean, Xv_day$close)$ret
+  comb <- midas_forecast$mean * Xv_day$close
+  co <- length(comb[comb >= 0]) / length(Xv_day$close)
+  
   if (summ) {
     print(summary(midas_model))
   }
   
-  return (list(mse=mse, r=rt, frc=midas_forecast$mean))
+  return (list(mse=mse, r=rt, frc=midas_forecast$mean, co=co))
 }
 
 try_hlags <- 1:30
@@ -142,17 +150,29 @@ best_r_mlag <- 0
 
 for (hlag in try_hlags) {
   for (mlag in try_mlags) {
-    result <- estimate_midas_model(day_train, day_val, hour_train, hour_val, hlag=hlag, mlag=mlag)
-    print(result$mse)
-    print(result$r)
-    print("")
+    total_mse <- 0
+    total_r <- 0
+    for (frac in 1:4) {
+      wl <- 100
+      freq <- 24
+      ind <- length(day_trainf$close)-frac*wl
+      m <- estimate_midas_model(day_trainf[1:ind,], day_trainf[(ind+1):(ind+wl),],
+                                hour_trainf[1:(ind*freq),], hour_trainf[(ind*freq+1):((ind + wl)*freq),], hlag=hlag, mlag=mlag)
+      total_mse <- total_mse + m$mse
+      total_r <- total_mse + m$r
+    }
     
-    if (result$mse < best_mse) {
+    #result <- estimate_midas_model(day_train, day_val, hour_train, hour_val, hlag=hlag, mlag=mlag)
+    print(total_mse)
+    print(total_r)
+    #print("")
+    
+    if (total_mse < best_mse) {
       best_mse <- result$mse
       best_mse_hlag <- hlag
       best_mse_mlag <- mlag
     }
-    if (result$r > best_r) {
+    if (total_r > best_r) {
       best_r <- result$r
       best_r_hlag <- hlag
       best_r_mlag <- mlag
@@ -161,19 +181,22 @@ for (hlag in try_hlags) {
 }
 
 mean_mse <- (1/length(day_test$close)) * sum((day_test$close - mean(day_train$close))^2)
-mean_r <- calc_invest_return(rep(1, length(day_test$close)), day_test$close)
+mean_r <- calc_invest_return(rep(1, length(day_test$close)), day_test$close, use_threshold = FALSE)
 
 full_mse <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, hlag=best_mse_hlag, mlag=best_mse_mlag, summ=FALSE)
 full_ret <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, hlag=best_r_hlag, mlag=best_r_mlag, summ=FALSE)
+print(full_ret$co)
 
-budget_mse_dev <- calc_invest_return(full_mse$frc, day_test$close)$path
-budget_r_dev <- calc_invest_return(full_ret$frc, day_test$close)$path
+budget_mse_dev <- calc_invest_return(full_mse$frc, day_test$close, use_threshold = TRUE)$path
+budget_r_dev <- calc_invest_return(full_ret$frc, day_test$close, use_threshold = TRUE)$path
 holding_dev <- mean_r$path
-  
+shorting_dev <- calc_invest_return(rep(-1, length(day_test$close)), day_test$close, use_threshold = FALSE)$path
+
 plot(day_test$close, type='l', col='black')
 lines(full_mse$frc, type='l', col='red')
 lines(full_ret$frc, type='l', col='green')
 
-plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, budget_r_dev), max(budget_mse_dev, holding_dev, budget_r_dev)))
+plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, budget_r_dev, shorting_dev), max(budget_mse_dev, holding_dev, budget_r_dev, shorting_dev)))
+lines(shorting_dev, type='l', col='blue')
 lines(budget_mse_dev, type='l', col='red')
 lines(budget_r_dev, type='l', col='green')
