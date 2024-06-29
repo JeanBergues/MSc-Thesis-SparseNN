@@ -10,22 +10,31 @@ import itertools as itertools
 import time as time
 import lassonet as ln
 
-def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad_cost=0.0015):
+def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad_cost=0, use_thresholds=True):
     value = start_val
     path = np.zeros(len(real))
     prev_pos = 1
+    mean_f = 0
 
     lb = np.mean(forecast) - np.std(forecast)
     ub = np.mean(forecast) + np.std(forecast)
 
     for t, (f, r) in enumerate(zip(forecast, real)):
         pos = prev_pos
-        if f < lb:
-            pos = 1
-        elif f > ub:
-            pos = -1
+        if use_thresholds:
+            if f < lb:
+                pos = -1
+            elif f > ub:
+                pos = 1
+            else:
+                pos = 0 if allow_empty else prev_pos
         else:
-            pos = 0 if allow_empty else prev_pos
+            if f < mean_f:
+                pos = -1
+            elif f > mean_f:
+                pos = 1
+            else:
+                pos = 0 if allow_empty else prev_pos
 
         if pos != prev_pos: value = value * (1 - trad_cost)
         prev_pos = pos
@@ -42,19 +51,26 @@ y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1,
 ytrain, ytest = ms.train_test_split(y_raw, test_size=0.2, shuffle=False)
 print("Data has been fully loaded")
 
-use_forecast = 'LassoHour'
+use_forecast = 'temp'
 forecast = np.load(f'forecasts/{use_forecast}.npy')
-ytest = ytest[0:]
+ytest = ytest[4:]
 
 print(len(forecast))
 print(len(ytest))
 assert len(forecast) == len(ytest)
 
 # Hype based strategy
-fret, investing_results = calc_investment_returns(forecast, ytest, trad_cost=0)
-hret, holding_results = calc_investment_returns(np.ones_like(ytest), ytest, trad_cost=0)
+fret, investing_results = calc_investment_returns(forecast, ytest, trad_cost=0, use_thresholds=False)
+hret, holding_results = calc_investment_returns(np.ones_like(ytest), ytest, trad_cost=0, use_thresholds=False)
+sret, shorting_results = calc_investment_returns(-1*np.ones_like(ytest), ytest, trad_cost=0, use_thresholds=False)
 
 x_axis = list(range(len(ytest.ravel())))
 sns.lineplot(x=x_axis, y=holding_results, color='black')
+sns.lineplot(x=x_axis, y=shorting_results, color='blue')
 sns.lineplot(x=x_axis, y=investing_results, color='red')
+plt.show()
+
+x_axis = list(range(len(ytest.ravel())))
+sns.lineplot(x=x_axis, y=ytest.ravel(), color='black')
+sns.lineplot(x=x_axis, y=forecast.ravel(), color='blue')
 plt.show()
