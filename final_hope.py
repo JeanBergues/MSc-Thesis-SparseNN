@@ -68,13 +68,16 @@ def plot_paper_lassonet(X1, y1, K=(10,), verbose=0, n_features=0, pm=1.02, M=10)
         res_k[i] = h.selected.sum()
         res_val[i] = h.val_loss
 
-    sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
-    plt.title("VALIDATION PERFORMANCE")
-    plt.show()
+    # sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
+    # plt.title("VALIDATION PERFORMANCE")
+    # plt.show()
 
+    backup_h = 100
     for h in history:
         if h.selected.sum() <= n_features:
-            return h.selected.data.numpy()
+            return h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
+        else:
+            backup_h = h.selected.sum()
 
 
 def return_MLP_skip_estimator(X1, y1, K=[10], activation='relu', test_size=60, epochs=500, patience=30, verbose=0, drop=0, shuff=False):
@@ -82,8 +85,8 @@ def return_MLP_skip_estimator(X1, y1, K=[10], activation='relu', test_size=60, e
     return train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adam(1e-3), ks.losses.MeanAbsoluteError(), ['mse'], activation=activation, neurons=K, verbose=verbose, patience=patience, epochs=epochs, drop=drop)
 
 
-def return_LassoNet_mask(X1, y1, K=[10], activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3, nfeat=0):
-    Xt, Xv, yt, yv = ms.train_test_split(X1, y1, test_size=60, shuffle=False)
+def return_LassoNet_mask(X1, y1, K=[10], activation='relu', M=10, epochs=500, test_size=60, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3, nfeat=0):
+    Xt, Xv, yt, yv = ms.train_test_split(X1, y1, test_size=test_size, shuffle=False)
     dense = train_dense_model(Xt, Xv, yt, yv, 1, ks.optimizers.Adamax(1e-3), ks.losses.MeanSquaredError(), ['mse'], activation=activation, neurons=K, verbose=1, patience=patience, epochs=epochs)
     dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError(), metrics=['mse'])
 
@@ -193,11 +196,11 @@ vol_h_returns =   ((hour_df.volume[1:].to_numpy() - hour_df.volume[:-1].to_numpy
 volNot_h_returns =((hour_df.volumeNotional[1:].to_numpy() - hour_df.volumeNotional[:-1].to_numpy()) / hour_df.volumeNotional[:-1].to_numpy()) * 100
 trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].to_numpy()) / hour_df.tradesDone[:-1].to_numpy()) * 100
 
-dlag_opt = [1, 2, 3, 7, 14]
-use_hlag = [True, False]
+# dlag_opt = [1, 2, 3, 7, 14]
+# use_hlag = [True, False]
 
-# dlag_opt = [1]
-# use_hlag = [True]
+dlag_opt = [5]
+use_hlag = [True]
 
 for d_nlags in dlag_opt:
     for use_h in use_hlag:
@@ -211,26 +214,26 @@ for d_nlags in dlag_opt:
                 Xlist = np.concatenate(
                     [
                         Xlist,
-                        # open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        # high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        # low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                         close_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        # vol_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        # volNot_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        # trades_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        vol_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        volNot_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        trades_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                     ], axis=1)
         if d_nlags > 0:
             for t in range(0, d_nlags):
                 Xlist = np.concatenate(
                     [
                         Xlist,
-                        # open_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        # high_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        # low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        open_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        high_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                         close_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        # vol_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        # volNot_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        # trades_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        vol_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        volNot_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        trades_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
                     ], axis=1)
 
         Xlist = Xlist[:, 1:]
@@ -273,28 +276,28 @@ for d_nlags in dlag_opt:
 
         best_mse = np.inf
         best_K = []
-        best_M = 0
+        best_M = 10
 
         K_opt = [
-            [5],
-            [20],
-            [50],
-            [100],
-            [200],
+            # [5],
+            # [20],
+            # [50],
+            # [100],
+            # [200],
 
-            [20, 5],
-            [50, 20],
-            [100, 50],
+            # [20, 5],
+            # [50, 20],
+            # [100, 50],
             [200, 100],
 
-            [50, 20, 5],
-            [100, 50, 20],
-            [200, 100, 50],
+            # [50, 20, 5],
+            # [100, 50, 20],
+            # [200, 100, 50],
 
-            [100, 50, 20, 5],
-            [200, 100, 50, 20],
+            # [100, 50, 20, 5],
+            # [200, 100, 50, 20],
 
-            [200, 100, 50, 20, 5],
+            # [200, 100, 50, 20, 5],
         ]
 
         M_opt = [
@@ -311,10 +314,11 @@ for d_nlags in dlag_opt:
                 # lnr = lsn.LassoNetRegressorCV(cv=ms.TimeSeriesSplit(n_splits=5), hidden_dims=(50, 20), verbose=2, path_multiplier=1.01)
                 # predictor = lnr.fit(Xtrain, ytrain)
                 # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
+                temp_mask = np.ravel(plot_paper_lassonet(Xt, yt.ravel(), K=tuple(K), verbose=2, n_features=int(0.4*Xt.shape[1]), pm=1.0001, M=M) != 0)
                 mses = np.zeros(5)
                 for i in range(len(mses)):
-                    predictor = return_MLP_skip_estimator(Xt, yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False) 
-                    ypred = predictor.predict(Xv).ravel()
+                    predictor = return_MLP_skip_estimator(Xt[:,temp_mask], yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
+                    ypred = predictor.predict(Xv[:,temp_mask]).ravel()
                     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
                     mse = mt.mean_squared_error(yv, ypred)
                     mses[i] = mse
@@ -329,10 +333,17 @@ for d_nlags in dlag_opt:
                     best_M = M
                     best_mse = np.mean(mses)
 
-        final_predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=100, drop=0, shuff=False, test_size=30*is_hour)
-        test_forecast = predictor.predict(Xtest).ravel()
+        final_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=tuple(K), verbose=2, n_features=int(0.4*Xtrain.shape[1]), pm=1.0001, M=best_M) != 0)
+
+        Xtm = Xtrain[:,final_mask]
+        Xtt = Xtest[:,final_mask]
+        Xtf = Xvoortest[:,final_mask]
+        # Xtest = Xtest[:,lasso_mask]
+
+        final_predictor = return_MLP_skip_estimator(Xtm, ytrain, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=100, drop=0, shuff=False, test_size=30*is_hour)
+        test_forecast = final_predictor.predict(Xtt).ravel()
         test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
-        full_forecast = predictor.predict(Xvoortest).ravel()
+        full_forecast = final_predictor.predict(Xtf).ravel()
         full_forecast = y_pp.inverse_transform(full_forecast.reshape(1, -1)).ravel()
 
         print("FINAL RESULTS")
@@ -343,13 +354,13 @@ for d_nlags in dlag_opt:
         print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
         print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
-        np.savetxt(f'forecasts/skip_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'forecasts/skip_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
-        np.save(f'forecasts/skip_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'forecasts/skip_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+        np.savetxt(f'forecasts/lasso_day_{d_nlags}_{h_nlags}_mask', final_mask)
+        np.savetxt(f'forecasts/lasso_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
+        np.savetxt(f'forecasts/lasso_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
+        np.save(f'forecasts/lasso_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
+        np.save(f'forecasts/lasso_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
 
         # print(f"Ran {n_repeats} experiments:")
         # print(f"Average MSE: {np.mean(results):.6f}")
         # print(f"STD of MSE: {np.std(results):.6f}")
         # ytrain = y_pp.inverse_transform(ytrain.reshape(-1, 1)).ravel()
-
