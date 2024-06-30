@@ -54,10 +54,10 @@ best_q <- 0
 best_a <- 0
 best_b <- 0
 
-try_p <- 1:3
-try_o <- 0:2
-try_q <- 0:3
-try_a <- 0:0
+try_p <- 1:1
+try_o <- 1:1
+try_q <- 1:1
+try_a <- 1:1
 try_b <- 0:0
 
 estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
@@ -123,4 +123,6 @@ lines(fm$forc, type='l', col='red')
 
 plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, shorting_dev), max(budget_mse_dev, holding_dev, shorting_dev)))
 lines(budget_mse_dev, type='l', col='red')
+
+write(fm$forc, file="txt_forecast/garch_day_test.txt")
 print("DONE")
