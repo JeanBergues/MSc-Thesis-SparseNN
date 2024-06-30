@@ -51,7 +51,7 @@ y_raw = ((close_prices[1:] - close_prices[:-1]) / close_prices[:-1]).reshape(-1,
 ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
 print("Data has been fully loaded")
 
-use_forecast = 'skip_dayX_test_3_3'
+use_forecast = 'skip_day_test_1_1'
 forecast = np.load(f'forecasts/{use_forecast}.npy')
 
 print(len(forecast))

@@ -193,11 +193,11 @@ vol_h_returns =   ((hour_df.volume[1:].to_numpy() - hour_df.volume[:-1].to_numpy
 volNot_h_returns =((hour_df.volumeNotional[1:].to_numpy() - hour_df.volumeNotional[:-1].to_numpy()) / hour_df.volumeNotional[:-1].to_numpy()) * 100
 trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].to_numpy()) / hour_df.tradesDone[:-1].to_numpy()) * 100
 
-dlag_opt = [1, 2, 3, 7]
+dlag_opt = [1, 2, 3, 7, 14]
 use_hlag = [True, False]
 
-dlag_opt = [1]
-use_hlag = [True]
+# dlag_opt = [1]
+# use_hlag = [True]
 
 for d_nlags in dlag_opt:
     for use_h in use_hlag:
@@ -277,24 +277,24 @@ for d_nlags in dlag_opt:
 
         K_opt = [
             [5],
-            # [20],
-            # [50],
-            # [100],
-            # [200],
+            [20],
+            [50],
+            [100],
+            [200],
 
-            # [20, 5],
-            # [50, 20],
-            # [100, 50],
-            # [200, 100],
+            [20, 5],
+            [50, 20],
+            [100, 50],
+            [200, 100],
 
-            # [50, 20, 5],
-            # [100, 50, 20],
-            # [200, 100, 50],
+            [50, 20, 5],
+            [100, 50, 20],
+            [200, 100, 50],
 
-            # [100, 50, 20, 5],
-            # [200, 100, 50, 20],
+            [100, 50, 20, 5],
+            [200, 100, 50, 20],
 
-            # [200, 100, 50, 20, 5],
+            [200, 100, 50, 20, 5],
         ]
 
         M_opt = [
