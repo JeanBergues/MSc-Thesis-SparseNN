@@ -199,8 +199,8 @@ trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].
 # dlag_opt = [1, 2, 3, 7, 14]
 # use_hlag = [True, False]
 
-dlag_opt = [7, 14]
-use_hlag = [True]
+dlag_opt = [1, 2, 3, 4]
+use_hlag = [False]
 
 for d_nlags in dlag_opt:
     for use_h in use_hlag:
@@ -279,31 +279,32 @@ for d_nlags in dlag_opt:
         best_M = 10
 
         K_opt = [
-            [5],
-            [20],
-            [50],
-            [100],
-            [200],
+            # [5],
+            # [20],
+            # [50],
+            # [100],
+            # [200],
 
-            [20, 5],
-            [50, 20],
-            [100, 50],
-            [200, 100],
+            # [20, 5],
+            # [50, 20],
+            # [100, 50],
+            # [200, 100],
 
-            [50, 20, 5],
-            [100, 50, 20],
-            [200, 100, 50],
+            # [50, 20, 5],
+            # [100, 50, 20],
+            # [200, 100, 50],
 
-            [100, 50, 20, 5],
-            [200, 100, 50, 20],
+            # [100, 50, 20, 5],
+            # [200, 100, 50, 20],
 
             [200, 100, 50, 20, 5],
+            [300, 200, 100, 50, 20],
         ]
 
         M_opt = [
+            1,
             2,
             5,
-            10,
             # 100
         ]
 
@@ -315,7 +316,7 @@ for d_nlags in dlag_opt:
                 # lnr = lsn.LassoNetRegressorCV(cv=ms.TimeSeriesSplit(n_splits=5), hidden_dims=(50, 20), verbose=2, path_multiplier=1.01)
                 # predictor = lnr.fit(Xtrain, ytrain)
                 # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
-                temp_mask = np.ravel(plot_paper_lassonet(Xt, yt.ravel(), K=tuple(K), verbose=0, n_features=int(0.4*Xt.shape[1]), pm=1.001, M=M) != 0)
+                temp_mask = np.ravel(plot_paper_lassonet(Xt, yt.ravel(), K=tuple(K), verbose=0, n_features=int(0.4*Xt.shape[1]), pm=1.01, M=M) != 0)
                 mses = np.zeros(5)
                 for i in range(len(mses)):
                     predictor = return_MLP_skip_estimator(Xt[:,temp_mask], yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
@@ -334,7 +335,7 @@ for d_nlags in dlag_opt:
                     best_M = M
                     best_mse = np.mean(mses)
 
-        final_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=tuple(K), verbose=2, n_features=int(0.4*Xtrain.shape[1]), pm=1.0005, M=best_M) != 0)
+        final_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=tuple(K), verbose=2, n_features=int(0.4*Xtrain.shape[1]), pm=1.01, M=best_M) != 0)
 
         Xtm = Xtrain[:,final_mask]
         Xtt = Xtest[:,final_mask]
@@ -355,12 +356,12 @@ for d_nlags in dlag_opt:
         print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
         print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
-        np.save(f'lasso_forc/lasso_day_{d_nlags}_{h_nlags}_mask', final_mask)
-        np.savetxt(f'lasso_forc/lasso_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'lasso_forc/lasso_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
-        np.savetxt(f'lasso_forc/lasso_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-        np.save(f'lasso_forc/lasso_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'lasso_forc/lasso_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+        np.save(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_mask', final_mask)
+        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
+        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
+        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
+        np.save(f'lasso_forc/elasso_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
+        np.save(f'lasso_forc/elasso_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
 
         # print(f"Ran {n_repeats} experiments:")
         # print(f"Average MSE: {np.mean(results):.6f}")

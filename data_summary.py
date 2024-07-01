@@ -1,26 +1,18 @@
 import pandas as pd
 
-# data = pd.read_csv('agg_btc_day.csv', parse_dates=['date', 'ddate'])
-data = pd.read_csv('btcusd_full.csv', nrows=20000)
-midpoints = (data.open + data.close) / 2
-data['variance'] = (data.high - midpoints) + (midpoints - data.low)
-# print(variance)
-# 1/0
-# returns = data.pct_change(1)[1:] * 100
-# print(len(returns))
-data.open = data.open / 1e3
-data.low = data.low / 1e3
-data.high = data.high / 1e3
-data.close = data.close / 1e3
-
-data.volume = data.volume / 1e4
-data.volumeNotional = data.volumeNotional / 1e8
-data.tradesDone = data.tradesDone / 1e5
+data = pd.read_csv('agg_btc_hour.csv', parse_dates=['date', 'ddate']).drop(['date', 'ddate'], axis=1).iloc[:, 1:]
+# fd = data.diff()[:,1:] / data[:-1] * 100
+fd = data.pct_change(1)
+# data = pd.read_csv('agg_btc_day.csv', parse_dates=['date'])
 
 # in_between = returns.describe().drop(['count']).to_latex(float_format="%.3f", escape=True)
 # print(in_between)
-in_between = data.describe().drop(['count']).T.to_latex(float_format="%.2f", escape=True).replace('e+', '$\\times10^{')
-print(in_between)
+df = fd.describe().drop(['count']).T
+df['skew'] = fd.skew(axis=0)
+df['kurt'] = fd.kurtosis(axis=0)
+print(len(fd['open']))
+
+print(df.to_latex(float_format="%.3f", escape=True))
 # final_string = ""
 # skip_first = False
 # for part in in_between.split('{'):

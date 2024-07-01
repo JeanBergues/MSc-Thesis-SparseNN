@@ -288,22 +288,22 @@ for d_nlags in dlag_opt:
         best_M = 10
 
         K_opt = [
-            [5],
-            [20],
-            [50],
-            [100],
+            # [5],
+            # [20],
+            # [50],
+            # [100],
             [200],
 
-            [20, 5],
-            [50, 20],
-            [100, 50],
+            # [20, 5],
+            # [50, 20],
+            # [100, 50],
             [200, 100],
 
-            [50, 20, 5],
-            [100, 50, 20],
+            # [50, 20, 5],
+            # [100, 50, 20],
             [200, 100, 50],
 
-            [100, 50, 20, 5],
+            # [100, 50, 20, 5],
             [200, 100, 50, 20],
 
             [200, 100, 50, 20, 5],
@@ -315,12 +315,12 @@ for d_nlags in dlag_opt:
             # 100
         ]
 
-        Xt, Xv, yt, yv = ms.train_test_split(Xvoortest, yvoortest, test_size=120*is_hour, shuffle=False)
+        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120*is_hour, shuffle=False)
         yv = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
         for K in K_opt:
             for M in M_opt:
-                mses = np.zeros(5)
+                mses = np.zeros(3)
                 for i in range(len(mses)):
                     predictor = return_MLP_skip_estimator(Xt, yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
                     ypred = predictor.predict(Xv).ravel()
@@ -352,10 +352,10 @@ for d_nlags in dlag_opt:
         print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
         print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
-        np.savetxt(f'skipx_forc/SKIPX_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'skipx_forc/SKIPX_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-        np.save(f'skipx_forc/SKIPX_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'skipx_forc/SKIPX_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+        np.savetxt(f'skipx_forc/SKIPXA_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
+        np.savetxt(f'skipx_forc/SKIPXA_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
+        np.save(f'skipx_forc/SKIPXA_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
+        np.save(f'skipx_forc/SKIPXA_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
 
         # print(f"Ran {n_repeats} experiments:")
         # print(f"Average MSE: {np.mean(results):.6f}")
