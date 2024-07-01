@@ -3,7 +3,6 @@ library(midasr)
 
 day_data <- read.csv('agg_btc_day.csv')
 hour_data <- read.csv('agg_btc_hour.csv')
-min_data <- read.csv('agg_btc_min.csv')
 
 calc_pct_diffs <- function (data_df, start_col=2) {
   df <- data.frame(index = 1:(length(data_df[[1]])-1))
@@ -17,7 +16,7 @@ calc_pct_diffs <- function (data_df, start_col=2) {
 
 split_train_test <- function (data_df, factor) {
   n <- length(data_df$index)
-  split_val <- n - (366 + 100) * factor
+  split_val <- n - (366 + 120) * factor
   split_t <- n - 366 * factor
   train <- data.frame(index = 1:split_val)
   trainf <- data.frame(index = 1:split_t)
@@ -90,14 +89,14 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
   midas_model = midas_r(
     y ~ 
       trend
-      y1
-      + fmls(x1, hlag, freq, nealmon) 
-      + fmls(x2, hlag, freq, nealmon) 
-      + fmls(x3, hlag, freq, nealmon)
+      + y1
+      #+ fmls(x1, hlag, freq, nealmon) 
+      #+ fmls(x2, hlag, freq, nealmon) 
+      #+ fmls(x3, hlag, freq, nealmon)
       + fmls(x4, hlag, freq, nealmon) 
-      + fmls(x5, hlag, freq, nealmon) 
-      + fmls(x6, hlag, freq, nealmon) 
-      + fmls(x7, hlag, freq, nealmon)
+      #+ fmls(x5, hlag, freq, nealmon) 
+      #+ fmls(x6, hlag, freq, nealmon) 
+      #+ fmls(x7, hlag, freq, nealmon)
       ,
     data = list(
       y=Xt_day$close[2:length(Xt_day$close)] 
@@ -112,13 +111,13 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
       ,x7=Xt_hour$tradesDone[1:(length(Xt_hour$open) - freq)]
     ),
     start = list(
-      x1=rep(0, 3), 
-      x2=rep(0, 3), 
-      x3=rep(0, 3),
-      x4=rep(0, 3),
-      x5=rep(0, 3),
-      x6=rep(0, 3),
-      x7=rep(0, 3)
+      #x1=rep(0, 3), 
+      #x2=rep(0, 3), 
+      #x3=rep(0, 3),
+      x4=rep(0, 3)
+      #x5=rep(0, 3),
+      #x6=rep(0, 3),
+      #x7=rep(0, 3)
     )
   )
   
@@ -147,7 +146,7 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
     print(summary(midas_model))
   }
   
-  return (list(mse=mse, r=rt, frc=midas_forecast$mean, co=co))
+  return (list(mse=mse, r=rt, frc=midas_forecast$mean, co=co, model=midas_model))
 }
 
 try_hlags <- 1:14
@@ -165,17 +164,10 @@ for (hlag in try_hlags) {
   for (mlag in try_mlags) {
     total_mse <- 0
     total_r <- 0
-    for (frac in 1:1) {
-      wl <- 60
-      freq <- 24
-      ind <- length(day_trainf$close)-frac*wl
-      m <- estimate_midas_model(day_trainf[1:ind,], day_trainf[(ind+1):(ind+wl),],
-                                hour_trainf[1:(ind*freq),], hour_trainf[(ind*freq+1):((ind + wl)*freq),], hlag=hlag, mlag=mlag)
-      total_mse <- total_mse + m$mse
-      total_r <- total_r + m$r
-    }
     
-    #result <- estimate_midas_model(day_train, day_val, hour_train, hour_val, hlag=hlag, mlag=mlag)
+    result <- estimate_midas_model(day_train, day_val, hour_train, hour_val, hlag=hlag, mlag=mlag)
+    total_mse <- result$mse
+    total_r <- result$r
     print(total_mse)
     print(total_r)
     #print("")
@@ -200,8 +192,10 @@ full_mse <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, h
 full_ret <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, hlag=best_r_hlag, mlag=best_r_mlag, summ=FALSE)
 print(full_ret$co)
 
-write(full_mse$frc, file="txt_forecast/midasX_day_m_test.txt")
-write(full_ret$frc, file="txt_forecast/midasX_day_r_test.txt")
+write(full_mse$frc, file="txt_forecast/amidas_day_m_test.txt")
+write(full_ret$frc, file="txt_forecast/amidas_day_r_test.txt")
+
+print(summary(full_mse$model))
 
 ytest <- day_test$close[2:(length(day_test$close) - 1)]
 budget_mse_dev <- calc_invest_return(full_mse$frc, ytest, use_threshold = TRUE)$path
