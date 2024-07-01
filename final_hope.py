@@ -199,8 +199,8 @@ trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].
 # dlag_opt = [1, 2, 3, 7, 14]
 # use_hlag = [True, False]
 
-dlag_opt = [2, 3]
-use_hlag = [False]
+dlag_opt = [2]
+use_hlag = [True]
 
 for d_nlags in dlag_opt:
     for use_h in use_hlag:
