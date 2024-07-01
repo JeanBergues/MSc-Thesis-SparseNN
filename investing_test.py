@@ -54,22 +54,36 @@ print("Data has been fully loaded")
 best_model_np = [
     'forecasts/SKIP_day_test_7_0',
     'forecasts/SKIP_day_test_7_7',
-    'skipx_forc/SKIPX_day_test_3_0',
-    'skipx_forc/SKIPX_day_test_1_1',
+    'skipx_forc/SKIPXA_day_test_3_0',
+    'skipx_forc/SKIPXA_day_test_1_1',
     'lasso_forc/lasso_day_test_2_2',
     'lasso_forc/lasso_day_test_7_7',
+    'lasso_forc/elasso_day_test_2_0',
 ]
 
 best_model_txt = [
-    
+    'txt_forecast/garch_day_test',
+    'txt_forecast/arima_day_test',
+    'txt_forecast/arimaX_hour_test',
 ]
+
+paths_to_plot = {}
 
 for m in best_model_np:
     fc = np.load(f'{m}.npy')[-365:]
     print(f"Examining {m}")
     print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, use_thresholds=False)
-    print(f"RETURN: {fret.ravel()[0]*100:.2f}")
+    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=False, use_thresholds=True)
+    print(f"RETURN: {fret*100:.2f}")
+    paths_to_plot[m] = investing_results
+
+for m in best_model_txt:
+    fc = np.loadtxt(f'{m}.txt', delimiter=' ').ravel()[-365:]
+    print(f"Examining {m}")
+    print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
+    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=False, use_thresholds=True)
+    print(f"RETURN: {fret*100:.2f}")
+    paths_to_plot[m] = investing_results
 
 # Hype based strategy
 

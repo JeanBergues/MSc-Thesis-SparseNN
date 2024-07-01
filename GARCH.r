@@ -125,5 +125,5 @@ plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev,
 lines(budget_mse_dev, type='l', col='red')
 lines(shorting_dev, type='l', col='blue')
 
-write(fm$forc, file="txt_forecast/garch_day_test.txt")
+write(fm$forc, file="txt_forecast/garch_test.txt")
 print("DONE")

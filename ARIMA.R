@@ -16,7 +16,7 @@ calc_pct_diffs <- function (data_df, start_col=2) {
 
 split_train_test <- function (data_df, factor) {
   n <- length(data_df$index)
-  split_val <- n - (365 + 100) * factor
+  split_val <- n - (365 + 120) * factor
   split_t <- n - 365 * factor - 1
   train <- data.frame(index = 1:split_val)
   trainf <- data.frame(index = 1:split_t)
@@ -65,38 +65,38 @@ calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_thresh
   return (list(ret=((budget - start_v) / start_v), path=path))
 }
 
-day_ret <- calc_pct_diffs(hour_data)
+day_ret <- calc_pct_diffs(day_data)
 
-split_day_data <- split_train_test(day_ret, factor=24)
+split_day_data <- split_train_test(day_ret, factor=1)
 day_train <- split_day_data$train
 day_trainf <- split_day_data$trainf
 day_val <- split_day_data$val
 day_test <- split_day_data$test
 
 ### Estimate the ARIMA model
-day_trainX <- as.matrix(day_trainf[c(-1, -5)])[1:(length(day_trainf$close) - 1*24),]
-day_testX <- as.matrix(day_test[c(-1, -5)])[1:(length(day_test$close) - 1*24),]
-day_retX <- as.matrix(day_ret[c(-1, -5)])[1:(length(day_ret$close) - 1*24),]
+day_trainX <- as.matrix(day_trainf[c(-1, -5)])[1:(length(day_trainf$close) - 1),]
+day_testX <- as.matrix(day_test[c(-1, -5)])[1:(length(day_test$close) - 1),]
+day_retX <- as.matrix(day_ret[c(-1, -5)])[1:(length(day_ret$close) - 1),]
 
-ytrain <- day_trainf$close[(1 + 1*24):length(day_trainf$close)]
-ytest <- day_test$close[(1 + 1*24):length(day_test$close)]
-yfull <- day_ret$close[(1 + 1*24):length(day_ret$close)]
+ytrain <- day_trainf$close[(1 + 1):length(day_trainf$close)]
+ytest <- day_test$close[(1 + 1):length(day_test$close)]
+yfull <- day_ret$close[(1 + 1):length(day_ret$close)]
 
-am <- auto.arima(ytrain, xreg=day_trainX)
+am <- auto.arima(ytrain)
 #am <- auto.arima(ytrain)
 print(summary(am))
-forecast <- fitted(Arima(ytest, model=am, xreg=day_testX))
+forecast <- fitted(Arima(ytest, model=am))
 #forecast <- fitted(Arima(ytest, model=am))
 
 mean_mse <- (1/length(ytest)) * sum((ytest - mean(ytrain))^2)
 mean_r <- calc_invest_return(rep(1, length(ytest)), ytest, use_threshold = FALSE)
 
-budget_mse_dev <- calc_invest_return(forecast, ytest, use_threshold = TRUE)$path
+budget_mse_dev <- calc_invest_return(forecast, ytest, use_threshold = FALSE)$path
 optimal_dev <- calc_invest_return(ytest, ytest, use_threshold = FALSE)$path
 holding_dev <- mean_r$path
 shorting_dev <- calc_invest_return(rep(-1, length(ytest)), ytest, use_threshold = FALSE)$path
 
-write(forecast, file="txt_forecast/arimaX_hour_test.txt")
+#write(forecast, file="txt_forecast/arima_day_test.txt")
 
 plot(ytest, type='l', col='black')
 lines(forecast, type='l', col='red')
