@@ -40,7 +40,7 @@ calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_thresh
 # Actually perform GARCH estimation
 rdf <- 100 * diff(df$close)/df$close[-length(df$close)]
 split <- 365
-val <- 100
+val <- 120
 
 rtr <- rdf[1:(length(rdf)-split - val)]
 rva <- rdf[(val+1):split]
@@ -54,11 +54,11 @@ best_q <- 0
 best_a <- 0
 best_b <- 0
 
-try_p <- 1:1
-try_o <- 1:1
-try_q <- 1:1
-try_a <- 1:1
-try_b <- 0:0
+try_p <- 1:5
+try_o <- 1:5
+try_q <- 1:5
+try_a <- 0:2
+try_b <- 0:2
 
 estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   spec <- ugarchspec(
@@ -73,7 +73,7 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
     spec=spec
   )
   
-  if (summ) {print(summary(model))}
+  if (summ) {print(model)}
   
   forc_results <- ugarchforecast(model, n.ahead=length(yv))
   forc <- as.numeric(fitted(forc_results))
@@ -81,7 +81,7 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   mse <- (1/length(yv)) * sum((yv - forc)^2)
   r <- calc_invest_return(forc, yv)
   
-  return (list(r=r, mse=mse, forc=forc))
+  return (list(r=r, mse=mse, forc=forc, fit=model))
 }
 
 for (p in try_p) {
@@ -114,15 +114,16 @@ fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, sum
 print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
 
-budget_mse_dev <- calc_invest_return(fm$forc, rts)$path
-holding_dev <- calc_invest_return(rep(1, length(rts)), rts)$path
-shorting_dev <- calc_invest_return(rep(-1, length(rts)), rts)$path
+budget_mse_dev <- calc_invest_return(fm$forc, rts, use_threshold=FALSE)$path
+holding_dev <- calc_invest_return(rep(1, length(rts)), rts, use_threshold=FALSE)$path
+shorting_dev <- calc_invest_return(rep(-1, length(rts)), rts, use_threshold=FALSE)$path
 
 plot(rts, type='l', col='black')
 lines(fm$forc, type='l', col='red')
 
 plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, shorting_dev), max(budget_mse_dev, holding_dev, shorting_dev)))
 lines(budget_mse_dev, type='l', col='red')
+lines(shorting_dev, type='l', col='blue')
 
 write(fm$forc, file="txt_forecast/garch_day_test.txt")
 print("DONE")

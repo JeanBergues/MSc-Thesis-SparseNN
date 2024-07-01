@@ -89,7 +89,7 @@ hour_test <- split_hour_data$test
 estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=1, summ=FALSE, freq=24) {
   midas_model = midas_r(
     y ~ 
-      #trend
+      trend
       y1
       + fmls(x1, hlag, freq, nealmon) 
       + fmls(x2, hlag, freq, nealmon) 
