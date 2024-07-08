@@ -18,3 +18,8 @@ agg_btc_min_old.csv
 .RData
 .Rhistory
 plots
+imputed_btc_data.csv
+level_btc_day.csv
+level_btc_hour.csv
+pct_btc_hour.csv
+pct_btc_day.csv
