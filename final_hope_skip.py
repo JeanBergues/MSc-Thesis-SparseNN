@@ -205,8 +205,8 @@ vol_h_returns =   ((hour_df.volume[1:].to_numpy() - hour_df.volume[:-1].to_numpy
 volNot_h_returns =((hour_df.volumeNotional[1:].to_numpy() - hour_df.volumeNotional[:-1].to_numpy()) / hour_df.volumeNotional[:-1].to_numpy()) * 100
 trades_h_returns =((hour_df.tradesDone[1:].to_numpy() - hour_df.tradesDone[:-1].to_numpy()) / hour_df.tradesDone[:-1].to_numpy()) * 100
 
-dlag_opt = [1, 2, 3, 7, 14]
-use_hlag = [True, False]
+dlag_opt = [1]
+use_hlag = [True]
 
 # dlag_opt = [5]
 # use_hlag = [True]
@@ -292,21 +292,24 @@ for d_nlags in dlag_opt:
             # [20],
             # [50],
             # [100],
-            [200],
+            # [200],
 
             # [20, 5],
             # [50, 20],
             # [100, 50],
-            [200, 100],
+            # [200, 100],
 
             # [50, 20, 5],
             # [100, 50, 20],
-            [200, 100, 50],
+            # [200, 100, 50],
 
             # [100, 50, 20, 5],
-            [200, 100, 50, 20],
+            # [200, 100, 50, 20],
 
+            [100, 50, 20, 10, 5],
             [200, 100, 50, 20, 5],
+            [300, 200, 100, 50, 20],
+            [400, 300, 200, 100, 50],
         ]
 
         M_opt = [
@@ -320,7 +323,7 @@ for d_nlags in dlag_opt:
 
         for K in K_opt:
             for M in M_opt:
-                mses = np.zeros(3)
+                mses = np.zeros(10)
                 for i in range(len(mses)):
                     predictor = return_MLP_skip_estimator(Xt, yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
                     ypred = predictor.predict(Xv).ravel()
@@ -352,10 +355,10 @@ for d_nlags in dlag_opt:
         print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
         print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
-        np.savetxt(f'skipx_forc/SKIPXA_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'skipx_forc/SKIPXA_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-        np.save(f'skipx_forc/SKIPXA_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'skipx_forc/SKIPXA_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+        np.savetxt(f'skipx_forc/SKIPXB_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
+        np.savetxt(f'skipx_forc/SKIPXB_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
+        np.save(f'skipx_forc/SKIPXB_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
+        np.save(f'skipx_forc/SKIPXB_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
 
         # print(f"Ran {n_repeats} experiments:")
         # print(f"Average MSE: {np.mean(results):.6f}")

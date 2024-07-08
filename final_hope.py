@@ -58,7 +58,7 @@ def return_lassonet_estimor(X1, y1, K=[10], verbose=0, cv=3):
 
 def plot_paper_lassonet(X1, y1, K=(10,), verbose=0, n_features=0, pm=1.02, M=10):
     Xt, Xv, yt, yv = ms.train_test_split(X1, y1, test_size=100, shuffle=False)
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=pm, M=M)
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=pm, M=M, patience=(100, 10), n_iters=(1000, 50))
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     res_k = np.zeros(len(history))
@@ -68,9 +68,9 @@ def plot_paper_lassonet(X1, y1, K=(10,), verbose=0, n_features=0, pm=1.02, M=10)
         res_k[i] = h.selected.sum()
         res_val[i] = h.val_loss
 
-    # sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
-    # plt.title("VALIDATION PERFORMANCE")
-    # plt.show()
+    sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
+    plt.title("VALIDATION PERFORMANCE")
+    plt.show()
 
     backup_h = 100
     for h in history:
@@ -275,8 +275,8 @@ for d_nlags in dlag_opt:
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
         best_mse = np.inf
-        best_K = []
-        best_M = 10
+        best_K = [200, 100, 50, 20, 5]
+        best_M = 1
 
         K_opt = [
             # [5],
@@ -310,31 +310,31 @@ for d_nlags in dlag_opt:
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120*is_hour, shuffle=False)
         yv = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-        for K in K_opt:
-            for M in M_opt:
-                # lnr = lsn.LassoNetRegressorCV(cv=ms.TimeSeriesSplit(n_splits=5), hidden_dims=(50, 20), verbose=2, path_multiplier=1.01)
-                # predictor = lnr.fit(Xtrain, ytrain)
-                # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
-                temp_mask = np.ravel(plot_paper_lassonet(Xt, yt.ravel(), K=tuple(K), verbose=0, n_features=int(0.4*Xt.shape[1]), pm=1.005, M=M) != 0)
-                mses = np.zeros(3)
-                for i in range(len(mses)):
-                    predictor = return_MLP_skip_estimator(Xt[:,temp_mask], yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
-                    ypred = predictor.predict(Xv[:,temp_mask]).ravel()
-                    ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
-                    mse = mt.mean_squared_error(yv, ypred)
-                    mses[i] = mse
+        # for K in K_opt:
+        #     for M in M_opt:
+        #         # lnr = lsn.LassoNetRegressorCV(cv=ms.TimeSeriesSplit(n_splits=5), hidden_dims=(50, 20), verbose=2, path_multiplier=1.01)
+        #         # predictor = lnr.fit(Xtrain, ytrain)
+        #         # predictor = return_lassoCV_estimor(Xtrain, ytrain.ravel(), cv=5, max_iter=5_000)
+        #         temp_mask = np.ravel(plot_paper_lassonet(Xt, yt.ravel(), K=tuple(K), verbose=0, n_features=int(0.5*Xt.shape[1]), pm=1.005, M=M) != 0)
+        #         mses = np.zeros(3)
+        #         for i in range(len(mses)):
+        #             predictor = return_MLP_skip_estimator(Xt[:,temp_mask], yt, verbose=0, K=K, test_size=60*is_hour, activation='tanh', epochs=20_000, patience=25, drop=0, shuff=False)
+        #             ypred = predictor.predict(Xv[:,temp_mask]).ravel()
+        #             ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
+        #             mse = mt.mean_squared_error(yv, ypred)
+        #             mses[i] = mse
 
-                print(f"Finished experiment")
-                print(f"K = {K}")
-                print(f"MSE: {np.mean(mses):.3f}")
-                print(f"MSE SDEV: {np.std(mses):.3f}")
+        #         print(f"Finished experiment")
+        #         print(f"K = {K}")
+        #         print(f"MSE: {np.mean(mses):.3f}")
+        #         print(f"MSE SDEV: {np.std(mses):.3f}")
 
-                if np.mean(mses) < best_mse:
-                    best_K = K
-                    best_M = M
-                    best_mse = np.mean(mses)
+        #         if np.mean(mses) < best_mse:
+        #             best_K = K
+        #             best_M = M
+        #             best_mse = np.mean(mses)
 
-        final_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=tuple(K), verbose=2, n_features=int(0.4*Xtrain.shape[1]), pm=1.001, M=best_M) != 0)
+        final_mask = np.ravel(plot_paper_lassonet(Xtrain, ytrain.ravel(), K=tuple(best_K), verbose=2, n_features=int(0.5*Xtrain.shape[1]), pm=1.002, M=best_M) != 0)
 
         Xtm = Xtrain[:,final_mask]
         Xtt = Xtest[:,final_mask]
@@ -355,12 +355,12 @@ for d_nlags in dlag_opt:
         print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
         print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
-        np.save(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_mask', final_mask)
-        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
-        np.savetxt(f'lasso_forc/elasso_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-        np.save(f'lasso_forc/elasso_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'lasso_forc/elasso_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+        # np.save(f'lasso_forc/flasso_day_{d_nlags}_{h_nlags}_mask', final_mask)
+        # np.savetxt(f'lasso_forc/flasso_day_{d_nlags}_{h_nlags}_K', np.array(best_K))
+        # np.savetxt(f'lasso_forc/flasso_day_{d_nlags}_{h_nlags}_M', np.array([best_M]))
+        # np.savetxt(f'lasso_forc/flasso_day_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
+        # np.save(f'lasso_forc/flasso_day_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
+        # np.save(f'lasso_forc/flasso_day_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
 
         # print(f"Ran {n_repeats} experiments:")
         # print(f"Average MSE: {np.mean(results):.6f}")

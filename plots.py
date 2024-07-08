@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import statsmodels.graphics.tsaplots as tsp
 from statsmodels.tsa.stattools import adfuller, grangercausalitytests
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.stattools import jarque_bera
 
 data = pd.read_csv('agg_btc_day.csv', parse_dates=['date', 'ddate'])
 hata = pd.read_csv('agg_btc_hour.csv', parse_dates=['date', 'ddate'])
@@ -14,7 +16,7 @@ fh = hata.drop(['date', 'ddate'], axis=1).iloc[:, 1:].pct_change(1)
 # print(data.date.to_numpy()[np.argmin(fd.close)])
 
 y = fd.close.values.ravel()[1:]
-print(adfuller(y))
+print(jarque_bera(y))
 
 1 / 0
 f = tsp.plot_pacf(y, lags=30, title='')
