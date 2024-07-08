@@ -3,7 +3,8 @@ import pandas as pd
 def main(name):
     full_df = pd.read_csv(f'level_btc_{name}.csv', parse_dates=['date', 'daydate'], index_col=0)
     pct_df = full_df.drop(['date', 'daydate'], axis=1).pct_change(periods=1) * 100
-    pct_df.drop(0, axis=0).to_csv(f'pct_btc_{name}.csv')
+    # pct_df['date'] = full_df.date[1:]
+    pct_df.drop(0, axis=0).to_csv(f'pct_btc_{name}.csv', index=False)
 
 if __name__ == '__main__':
     main('day')
