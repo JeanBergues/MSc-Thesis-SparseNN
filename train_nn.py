@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
-import keras as ks
 import tensorflow as tf
 
+np.random.seed(1234)
+tf.random.set_seed(1234)
+
+import keras as ks
 import sklearn.preprocessing as pp
 import sklearn.model_selection as ms
 import sklearn.metrics as mt
@@ -204,6 +207,7 @@ for d_nlags in dlag_opt:
         #     if np.mean(mses) < best_mse:
         #         best_K = K
         #         best_mse = np.mean(mses)
+        
 
         final_predictor = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=200, drop=0, test_size=30)
         test_forecast = final_predictor.predict(Xtest).ravel()
