@@ -180,9 +180,8 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def paper_lassonet_mask(X1, y1, K=(10,), verbose=0, n_features=0, pm=0.02, M=10, plot=False, test_size=60):
-    Xt, Xv, yt, yv = ms.train_test_split(X1, y1, test_size=test_size, shuffle=False)
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=(100, 10), n_iters=(1000, 100))
+def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, n_features=0, pm=0.02, M=10, plot=False, test_size=30):
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=(200, 10), n_iters=(5000, 100))
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     if plot:
@@ -204,12 +203,23 @@ def paper_lassonet_mask(X1, y1, K=(10,), verbose=0, n_features=0, pm=0.02, M=10,
         plt.title("SELECTED VS LAMBDA")
         plt.show()
 
-    backup_h = 100
+    lowest_obj = np.inf
+
     for h in history:
+        if h.val_loss < lowest_obj:
+            lowest_obj = h.val_loss
+            obj_h = h.selected.data.numpy()
         if h.selected.sum() <= n_features:
-            return h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
+            frac_h = h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
         else:
-            backup_h = h.selected.sum()
+            backup_h = h.selected.data.numpy()
+
+    if np.sum(obj_h) > 0:
+        print("Minimized objective!")
+        return obj_h
+    else:
+        print("Fractional features!")
+        return frac_h
 
 
 def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3, nfeat=0, ppatience=10, pepochs=100):
@@ -371,32 +381,34 @@ for d_nlags in dlag_opt:
 
         np.random.seed(1234)
         tf.random.set_seed(1234)
-
-        # # Robustness of final model
-        # final_results = np.zeros(5)
-        # for i in range(5):
-        #     nn = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0, test_size=30)
-        #     test_f = nn.predict(Xtest).ravel()
-        #     test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-        #     experiment_mse = mt.mean_squared_error(ytest, test_f)
-        #     print(f"FINAL MSE: {experiment_mse:.3f}")
-        #     final_results[i] = experiment_mse
+        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
+        final_mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, n_features=int(0.5*Xtrain.shape[1]), pm=0.005, M=1, plot=True) != 0)
+        # Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
+        # final_mask = np.ravel(return_LassoNet_mask(Xtt, Xtv, ytt, ytv, K=best_K, activation='tanh', M=5, pm=0.02, epochs=2000, 
+                                                #    patience=100, print_path=True, nfeat=0, plot=True, ppatience=10, pepochs=500) != 0)
         
-        # print(np.mean(final_results))
-        # print(np.std(final_results))
-
-        # final_mask = np.ravel(paper_lassonet_mask(Xtrain, ytrain.ravel(), K=tuple(best_K), verbose=2, n_features=int(0.5*Xtrain.shape[1]), pm=0.005, M=0.5, plot=True) != 0)
-        Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-        final_mask = np.ravel(return_LassoNet_mask(Xtt, Xtv, ytt, ytv, K=best_K, activation='tanh', M=5, pm=0.02, epochs=2000, 
-                                                   patience=100, print_path=True, nfeat=0, plot=True, ppatience=10, pepochs=500) != 0)
-
-        1 / 0
         Xtm = Xtrain[:,final_mask]
         Xtt = Xtest[:,final_mask]
         Xtf = Xvoortest[:,final_mask]
+        print(f"Selected {np.sum(final_mask)} features.")
+        Xt, Xv, yt, yv = ms.train_test_split(Xtm, ytrain, test_size=30, shuffle=False)
 
-        Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-        final_predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
+        # Robustness of final model
+        final_results = np.zeros(5)
+        for i in range(5):
+            nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
+            test_f = nn.predict(Xtt).ravel()
+            test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+            experiment_mse = mt.mean_squared_error(ytest, test_f)
+            print(f"FINAL MSE: {experiment_mse:.3f}")
+            final_results[i] = experiment_mse
+        
+        print(np.mean(final_results))
+        print(np.std(final_results))
+        
+        1/0
+
+        final_predictor = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
         test_forecast = final_predictor.predict(Xtt).ravel()
         test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
         full_forecast = final_predictor.predict(Xtf).ravel()

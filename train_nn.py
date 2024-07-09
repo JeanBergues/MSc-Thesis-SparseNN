@@ -159,7 +159,7 @@ def main():
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
             best_mse = np.inf
-            best_K = [200, 100, 50, 20, 5]
+            best_K = [200, 150, 100, 50, 20]
 
             K_opt = [
                 # [5],
@@ -209,19 +209,22 @@ def main():
 
             np.random.seed(1234)
             tf.random.set_seed(1234)
+            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
 
-            # # Robustness of final model
-            # final_results = np.zeros(5)
-            # for i in range(5):
-            #     nn = return_MLP_skip_estimator(Xtrain, ytrain, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0, test_size=30)
-            #     test_f = nn.predict(Xtest).ravel()
-            #     test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-            #     experiment_mse = mt.mean_squared_error(ytest, test_f)
-            #     print(f"FINAL MSE: {experiment_mse:.3f}")
-            #     final_results[i] = experiment_mse
+            # Robustness of final model
+            final_results = np.zeros(5)
+            for i in range(5):
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
+                test_f = nn.predict(Xtest).ravel()
+                test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+                experiment_mse = mt.mean_squared_error(ytest, test_f)
+                print(f"FINAL MSE: {experiment_mse:.3f}")
+                final_results[i] = experiment_mse
             
-            # print(np.mean(final_results))
-            # print(np.std(final_results))
+            print(np.mean(final_results))
+            print(np.std(final_results))
+
+            1/0
 
             Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
             final_predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
