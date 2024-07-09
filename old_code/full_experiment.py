@@ -14,6 +14,25 @@ import time as time
 from full_mylasso import train_lasso_path, train_dense_model, hier_prox, estimate_starting_lambda
 
 
+def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 10000, verbose=False, divide_result = 1):
+    initial_theta = theta
+    dense_W = W
+    dense_theta = initial_theta
+    l_test = starting_lambda
+
+    while not np.sum(np.abs(dense_theta)) == 0:
+        dense_theta = initial_theta
+        l_test = l_test * factor
+        if verbose: print(f"Testing lambda={l_test}")
+
+        for _ in range(max_iter_per_lambda):
+            theta_new, _ = hier_prox(dense_theta, dense_W, l_test, M)
+            if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
+            dense_theta = theta_new
+
+    return l_test / divide_result
+
+
 def return_MLP_estimator(X, y, K=[10], activation='relu', patience=30, epochs=500, verbose=0, optimizer=ks.optimizers.Adam(1e-3), loss_func=ks.losses.MeanSquaredError(), metrics=['mse']):
     Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
     inp = ks.layers.Input(shape=(Xt.shape[1],))
