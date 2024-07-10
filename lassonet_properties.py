@@ -181,81 +181,34 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, n_features=0, pm=0.02, M=10, plot=False, test_size=30):
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=(200, 10), n_iters=(5000, 100))
+def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100)):
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters)
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
-    if plot:
-        res_k = np.zeros(len(history))
-        res_val = np.zeros(len(history))
-        res_l = np.zeros(len(history))
+    res_k = np.zeros(len(history))
+    res_val = np.zeros(len(history))
+    res_l = np.zeros(len(history))
 
-        for i, h in enumerate(history):
-            res_k[i] = h.selected.sum()
-            res_val[i] = h.val_loss
-            res_l[i] = h.lambda_
+    for i, h in enumerate(history):
+        res_k[i] = h.selected.sum()
+        res_val[i] = h.val_loss
+        res_l[i] = h.lambda_
 
-        
-        sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
-        plt.title("VALIDATION PERFORMANCE")
-        plt.show()
-
-        sns.lineplot(x=np.array(res_l), y=np.array(res_k), markers=True)
-        plt.title("SELECTED VS LAMBDA")
-        plt.show()
-
-    lowest_obj = np.inf
-
-    for h in history:
-        if h.val_loss < lowest_obj:
-            lowest_obj = h.val_loss
-            obj_h = h.selected.data.numpy()
-        if h.selected.sum() <= n_features:
-            frac_h = h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
-        else:
-            backup_h = h.selected.data.numpy()
-
-    if np.sum(obj_h) > 0:
-        print("Minimized objective!")
-        return obj_h
-    else:
-        print("Fractional features!")
-        return frac_h
+    return (res_k, res_val, res_l)
 
 
-def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, epochs=500, patience=5, print_lambda=False, print_path=False, plot=False, a=1e-3, nfeat=0, ppatience=10, pepochs=100):
-    dense = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation=activation, K=K, verbose=1, patience=patience, epochs=epochs)
+def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-3):
+    dense = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation=activation, K=K, verbose=1, patience=patiences[0], epochs=max_iters[0])
     # dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError())
 
-    starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=4)
+    starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=10)
 
     res_k, res_theta, res_val, res_l = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-        train_until_k=nfeat, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=pepochs, use_best_weights=True,
-        patience=ppatience, verbose=print_path, use_faster_eval=False)
+        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=True,
+        patience=patiences[1], verbose=print_path, use_faster_eval=False)
 
-    # Plot accuracies at all points of the lasso path
-    if plot:
-        sns.lineplot(x=np.array(res_k), y=np.array(res_val), markers=True)
-        plt.title("VALIDATION PERFORMANCE")
-        plt.show()
-
-        sns.lineplot(x=np.array(res_l), y=np.array(res_k), markers=True)
-        plt.title("K VS LAMBDA")
-        plt.show()
-
-    # index_first_non_full = np.argwhere(np.array(res_k) < res_k[0]).ravel()[0]
-    # final_theta = res_theta[index_first_non_full:][np.argmin(np.array(res_val)[index_first_non_full:])]
-    if nfeat == 0:
-        # index_first_non_full = np.argwhere(np.array(res_k) < res_k[0]*0.8).ravel()[0]
-        # final_theta = res_theta[index_first_non_full:][np.argmin(np.array(res_val)[index_first_non_full:])]
-        final_theta = res_theta[np.argmin(np.array(res_val))]
-    else:
-        final_theta = res_theta[-1]
-    theta_mask = np.ravel(final_theta != 0)
-    print(f"Selected {np.sum(theta_mask)} features.")
-
-    return theta_mask
+    return (res_k, res_val, res_l)
 
 
 ###############################################################################################################################################################################################
@@ -331,97 +284,64 @@ for d_nlags in dlag_opt:
         n_repeats = 1
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
-        best_mse = np.inf
         best_K = [200, 150, 100, 50, 20]
 
-        K_opt = [
-            # [5],
-            # [20],
-            # [50],
-            # [100],
-            # [200],
-
-            # [20, 5],
-            # [50, 20],
-            # [100, 50],
-            # [200, 100],
-
-            # [50, 20, 5],
-            # [100, 50, 20],
-            # [200, 100, 50],
-
-            # [100, 50, 20, 5],
-            # [200, 100, 50, 20],
-
-            # [100, 50, 20, 10, 5],
-            [200, 100, 50, 20, 5],
-            # [300, 200, 100, 50, 20],
-            # [400, 300, 200, 100, 50],
-        ]
-
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-        yv = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-        # for K in K_opt:
-        #     mses = np.zeros(5)
-        #     for i in range(len(mses)):
-        #         predictor = return_MLP_skip_estimator(Xt, yt, verbose=0, K=K, test_size=60, activation='tanh', epochs=20_000, patience=25, drop=0)
-        #         ypred = predictor.predict(Xv).ravel()
-        #         ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
-        #         mse = mt.mean_squared_error(yv, ypred)
-        #         mses[i] = mse
+        # Run for M variations
+        HP_opts = [10, 50, 100]
+        HP_results = []
 
-        #     print(f"Finished experiment")
-        #     print(f"K = {K}")
-        #     print(f"MSE: {np.mean(mses):.3f}")
-        #     print(f"MSE SDEV: {np.std(mses):.3f}")
+        USE_PAPER_LASSONET = True
 
-        #     if np.mean(mses) < best_mse:
-        #         best_K = K
-        #         best_mse = np.mean(mses)
+        for m in HP_opts:
+            np.random.seed(1234)
+            tf.random.set_seed(1234)
+            ks.utils.set_random_seed(1234)
+            pt.manual_seed(1234)
 
-        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-        final_mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, n_features=int(0.5*Xtrain.shape[1]), pm=0.005, M=1, plot=True) != 0)
+            if USE_PAPER_LASSONET:
+                res_k, res_val, res_l = paper_lassonet_mask(
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=1, patiences=(100, 10), max_iters=(1000, m))
+            else:
+                res_k, res_val, res_l = return_LassoNet_mask(
+                    Xt, Xv, yt, yv, K=best_K, pm=0.005, M=1, patiences=(100, 10), max_iters=(1000, m), print_path=True)
+            
+            HP_results.append((res_k, res_val, res_l))
+
+        # Plot selected features against mse
+        fig = plt.figure(figsize=(8, 4))
+        for m, res in zip(HP_opts, HP_results):
+            fig = sns.lineplot(x=np.array(res[0]), y=np.array(res[1]), markers=True, drawstyle='steps-pre', size=10)
+        
+        # plt.legend(labels=[f"M={l}" for l in HP_opts])
+        legd = fig.get_legend()
+        for t, l in zip(legd.texts, HP_opts):
+            t.set_text(f"M={l}")
+
+        sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
+        plt.xlabel("selected features")
+        plt.ylabel("mse")
+        plt.show()
+
+        # Plot selected features against lambda
+        fig = plt.figure(figsize=(16, 6))
+        for m, res in zip(HP_opts, HP_results):
+            fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[0]), markers=True, drawstyle='steps-pre', size=10)
+        
+        # plt.legend(labels=[f"M={l}" for l in HP_opts])
+        legd = fig.get_legend()
+        for t, l in zip(legd.texts, HP_opts):
+            t.set_text(f"M={l}")
+
+        sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
+        plt.xlabel(r'$\lambda$')
+        plt.ylabel("selected features")
+        plt.show()
+        
+
+
+
         # Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
         # final_mask = np.ravel(return_LassoNet_mask(Xtt, Xtv, ytt, ytv, K=best_K, activation='tanh', M=5, pm=0.02, epochs=2000, 
                                                 #    patience=100, print_path=True, nfeat=0, plot=True, ppatience=10, pepochs=500) != 0)
-        
-        Xtm = Xtrain[:,final_mask]
-        Xtt = Xtest[:,final_mask]
-        Xtf = Xvoortest[:,final_mask]
-        print(f"Selected {np.sum(final_mask)} features.")
-        Xt, Xv, yt, yv = ms.train_test_split(Xtm, ytrain, test_size=30, shuffle=False)
-
-        # Robustness of final model
-        final_results = np.zeros(5)
-        for i in range(5):
-            nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
-            test_f = nn.predict(Xtt).ravel()
-            test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-            experiment_mse = mt.mean_squared_error(ytest, test_f)
-            print(f"FINAL MSE: {experiment_mse:.3f}")
-            final_results[i] = experiment_mse
-        
-        print(np.mean(final_results))
-        print(np.std(final_results))
-        
-        1/0
-
-        final_predictor = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
-        test_forecast = final_predictor.predict(Xtt).ravel()
-        test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
-        full_forecast = final_predictor.predict(Xtf).ravel()
-        full_forecast = y_pp.inverse_transform(full_forecast.reshape(1, -1)).ravel()
-
-        print("FINAL RESULTS")
-        print(f"BEST K = {best_K}")
-        print(f"MSE = {best_mse:.3f}")
-
-        print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
-        # print(f"FINAL RETURN: {calc_investment_returns(test_forecast, ytest, allow_empty=False, use_thresholds=False, ytrain=ytrain)[0]:.3f}")
-        print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
-        
-        np.savetxt(f'final_forecasts/SKIPX_{d_nlags}_{h_nlags}_K', np.array(best_K))
-        np.savetxt(f'final_forecasts/SKIPX_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-        np.save(f'final_forecasts/SKIPX_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-        np.save(f'final_forecasts/SKIPX_full_{d_nlags}_{h_nlags}', full_forecast.ravel())

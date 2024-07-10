@@ -1,14 +1,14 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-
-np.random.seed(1234)
-tf.random.set_seed(1234)
-
 import keras as ks
 import sklearn.preprocessing as pp
 import sklearn.model_selection as ms
 import sklearn.metrics as mt
+
+np.random.seed(1234)
+tf.random.set_seed(1234)
+ks.utils.set_random_seed(1234)
 
 
 def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
@@ -51,12 +51,11 @@ def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val
     return (value / start_val - 1, path)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0):
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     inp = ks.layers.Input(shape=(Xt.shape[1],))
     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
-    dp = ks.layers.Dropout(drop)(inp)
-    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(dp)
+    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     if len(K) > 1:
         for k in K[1:]:
             gw = ks.layers.Dense(units=k, activation=activation)(gw)   
@@ -207,27 +206,27 @@ def main():
             #         best_K = K
             #         best_mse = np.mean(mses)
 
-            np.random.seed(1234)
-            tf.random.set_seed(1234)
-            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-
-            # Robustness of final model
-            final_results = np.zeros(5)
-            for i in range(5):
-                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
-                test_f = nn.predict(Xtest).ravel()
-                test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-                experiment_mse = mt.mean_squared_error(ytest, test_f)
-                print(f"FINAL MSE: {experiment_mse:.3f}")
-                final_results[i] = experiment_mse
             
-            print(np.mean(final_results))
-            print(np.std(final_results))
+            # Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
 
-            1/0
+            # # Robustness of final model
+            # final_results = np.zeros(5)
+            # for i in range(5):
+            #     nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
+            #     test_f = nn.predict(Xtest).ravel()
+            #     test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+            #     experiment_mse = mt.mean_squared_error(ytest, test_f)
+            #     print(f"FINAL MSE: {experiment_mse:.3f}")
+            #     final_results[i] = experiment_mse
+            
+            # print(np.mean(final_results))
+            # print(np.std(final_results))
+
+            # 1/0
 
             Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-            final_predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
+            final_predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50)
+
             test_forecast = final_predictor.predict(Xtest).ravel()
             test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
             full_forecast = final_predictor.predict(Xvoortest).ravel()
