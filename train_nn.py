@@ -77,7 +77,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[10], activation='relu', epochs=
 
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
-    nn.compile(optimizer=ks.optimizers.Adam(), loss=ks.losses.MeanSquaredError())
+    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
     nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
 
     return nn
@@ -109,11 +109,14 @@ def main():
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
     dlag_opt = [1]
-    use_hlag = [True]
+    use_hlag = [4, 5, 6]
+
+    # dlag_opt = [2]
+    # use_hlag = [2]
 
     for d_nlags in dlag_opt:
-        for use_h in use_hlag:
-            h_nlags = d_nlags if use_h else 0
+        for h_nlags in use_hlag:
+            EXPERIMENT_NAME = f"final_forecasts/SKIPX_{d_nlags}_{h_nlags}"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -122,6 +125,8 @@ def main():
                 for t_h in range(0, h_nlags):
                     Xlist = np.concatenate(
                         [
+                            # [(bound_lag*freq-1-t_h):(-1-t_h):freq]
+                            # [(bound_lag*freq-t_h):(-t_h):freq]
                             Xlist,
                             open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
                             high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
@@ -157,93 +162,82 @@ def main():
             n_repeats = 1
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
-            best_mse = np.inf
-            best_K = [200, 150, 100, 50, 20]
+            best_val_mse = np.inf
+            best_val_mse_sd = 0
+            best_K = [200, 100, 50, 20, 5]
 
             K_opt = [
-                # [5],
-                # [20],
-                # [50],
-                # [100],
-                # [200],
-
-                # [20, 5],
-                # [50, 20],
-                # [100, 50],
-                # [200, 100],
-
-                # [50, 20, 5],
-                # [100, 50, 20],
-                # [200, 100, 50],
-
-                # [100, 50, 20, 5],
-                # [200, 100, 50, 20],
-
-                # [100, 50, 20, 10, 5],
+                [100, 50, 20, 10],
+                [200, 100, 50, 20],
+                [100, 50, 20, 10, 5],
                 [200, 100, 50, 20, 5],
-                # [300, 200, 100, 50, 20],
-                # [400, 300, 200, 100, 50],
+                [100, 75, 50, 20, 10, 5],
+                [200, 100, 50, 20, 10, 5],
             ]
 
-            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-            yv = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
+            # Select layer size using validation set
+            if True:
+                Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+                yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-            # for K in K_opt:
-            #     mses = np.zeros(5)
-            #     for i in range(len(mses)):
-            #         predictor = return_MLP_skip_estimator(Xt, yt, verbose=0, K=K, test_size=60, activation='tanh', epochs=20_000, patience=25, drop=0)
-            #         ypred = predictor.predict(Xv).ravel()
-            #         ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
-            #         mse = mt.mean_squared_error(yv, ypred)
-            #         mses[i] = mse
+                for K in K_opt:
+                    mses = np.zeros(10)
+                    for i in range(len(mses)):
+                        predictor = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=K, activation='tanh', epochs=20_000, patience=50)
+                        ypred = predictor.predict(Xv).ravel()
+                        ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
+                        mse = mt.mean_squared_error(yval, ypred)
+                        mses[i] = mse
 
-            #     print(f"Finished experiment")
-            #     print(f"K = {K}")
-            #     print(f"MSE: {np.mean(mses):.3f}")
-            #     print(f"MSE SDEV: {np.std(mses):.3f}")
+                    print(f"Finished experiment")
+                    print(f"K = {K}")
+                    print(f"MSE: {np.mean(mses):.3f}")
+                    print(f"MSE SDEV: {np.std(mses):.3f}")
 
-            #     if np.mean(mses) < best_mse:
-            #         best_K = K
-            #         best_mse = np.mean(mses)
+                    if np.mean(mses) < best_val_mse:
+                        best_K = K
+                        best_val_mse = np.mean(mses)
+                        best_val_mse_sd = np.std(mses)
 
+                print("VALIDATION RESULTS")
+                print(f"BEST K = {best_K}")
+                print(f"MSE = {best_val_mse:.3f}")
+                print(f"SD = {best_val_mse_sd:.3f}")
+                np.savetxt(f'{EXPERIMENT_NAME}_VAL_K', np.array(best_K))
+                np.savetxt(f'{EXPERIMENT_NAME}_VAL_STATS', np.array([best_val_mse, best_val_mse_sd]))
+
+            # Select final model based on small validation set
+            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
+            yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
+
+            best_final_mse = np.inf
+
+            # Robustness of final model
+            n_tests = 10
+            final_results = np.zeros(n_tests)
+            for i in range(n_tests):
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
+                test_f = nn.predict(Xtest).ravel()
+                test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+                experiment_mse = mt.mean_squared_error(ytest, test_f)
+                print(f"FINAL MSE: {experiment_mse:.3f}")
+                final_results[i] = experiment_mse
+
+                val_f = nn.predict(Xv).ravel()
+                val_f = y_pp.inverse_transform(val_f.reshape(1, -1)).ravel()
+                val_mse = mt.mean_squared_error(yval, val_f)
+                if val_mse < best_final_mse:
+                    best_final_mse = val_mse
+                    test_forecast = test_f
             
-            # Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-
-            # # Robustness of final model
-            # final_results = np.zeros(5)
-            # for i in range(5):
-            #     nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
-            #     test_f = nn.predict(Xtest).ravel()
-            #     test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-            #     experiment_mse = mt.mean_squared_error(ytest, test_f)
-            #     print(f"FINAL MSE: {experiment_mse:.3f}")
-            #     final_results[i] = experiment_mse
-            
-            # print(np.mean(final_results))
-            # print(np.std(final_results))
-
-            # 1/0
-
-            Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-            final_predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=1, K=best_K, activation='tanh', epochs=20_000, patience=50)
-
-            test_forecast = final_predictor.predict(Xtest).ravel()
-            test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
-            full_forecast = final_predictor.predict(Xvoortest).ravel()
-            full_forecast = y_pp.inverse_transform(full_forecast.reshape(1, -1)).ravel()
-
             print("FINAL RESULTS")
-            print(f"BEST K = {best_K}")
-            print(f"MSE = {best_mse:.3f}")
-
-            print(f"FINAL MSE: {mt.mean_squared_error(ytest, test_forecast):.3f}")
-            # print(f"FINAL RETURN: {calc_investment_returns(test_forecast, ytest, allow_empty=False, use_thresholds=False, ytrain=ytrain)[0]:.3f}")
-            print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+            print(f"AVERAGE TEST MSE = {np.mean(final_results):.3f}")
+            print(f"AVERAGE TEST SD = {np.std(final_results):.3f}")
+            print(f"BEST TEST MSE = {mt.mean_squared_error(ytest, test_forecast):.3f}")
+            print(f"Only mean MSE = {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
             
-            np.savetxt(f'final_forecasts/SKIPX_{d_nlags}_{h_nlags}_K', np.array(best_K))
-            np.savetxt(f'final_forecasts/SKIPX_{d_nlags}_{h_nlags}_MSE', np.array([best_mse]))
-            np.save(f'final_forecasts/SKIPX_test_{d_nlags}_{h_nlags}', test_forecast.ravel())
-            np.save(f'final_forecasts/SKIPX_full_{d_nlags}_{h_nlags}', full_forecast.ravel())
+            np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse]))
+            np.save(f'{EXPERIMENT_NAME}_FORECAST', test_forecast.ravel())
 
 if __name__ == '__main__':
     main()

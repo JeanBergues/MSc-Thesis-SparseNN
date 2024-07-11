@@ -235,7 +235,7 @@ vol_h_returns =   hour_df.volume.to_numpy()
 volNot_h_returns =hour_df.volumeNotional.to_numpy()
 trades_h_returns =hour_df.tradesDone.to_numpy()
 
-dlag_opt = [3]
+dlag_opt = [2]
 use_hlag = [True]
 
 for d_nlags in dlag_opt:
@@ -289,7 +289,7 @@ for d_nlags in dlag_opt:
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
 
         # Run for M variations
-        HP_opts = [10, 50, 100]
+        HP_opts = [0.5, 1, 2]
         HP_results = []
 
         USE_PAPER_LASSONET = True
@@ -302,7 +302,7 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask(
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=1, patiences=(100, 10), max_iters=(1000, m))
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.01, M=m, patiences=(100, 10), max_iters=(1000, 20))
             else:
                 res_k, res_val, res_l = return_LassoNet_mask(
                     Xt, Xv, yt, yv, K=best_K, pm=0.005, M=1, patiences=(100, 10), max_iters=(1000, m), print_path=True)
@@ -310,7 +310,7 @@ for d_nlags in dlag_opt:
             HP_results.append((res_k, res_val, res_l))
 
         # Plot selected features against mse
-        fig = plt.figure(figsize=(8, 4))
+        fig = plt.figure(figsize=(10, 4))
         for m, res in zip(HP_opts, HP_results):
             fig = sns.lineplot(x=np.array(res[0]), y=np.array(res[1]), markers=True, drawstyle='steps-pre', size=10)
         
@@ -325,7 +325,7 @@ for d_nlags in dlag_opt:
         plt.show()
 
         # Plot selected features against lambda
-        fig = plt.figure(figsize=(16, 6))
+        fig = plt.figure(figsize=(10, 4))
         for m, res in zip(HP_opts, HP_results):
             fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[0]), markers=True, drawstyle='steps-pre', size=10)
         
