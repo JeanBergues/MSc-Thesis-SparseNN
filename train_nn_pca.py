@@ -5,6 +5,7 @@ import keras as ks
 import sklearn.preprocessing as pp
 import sklearn.model_selection as ms
 import sklearn.metrics as mt
+import sklearn.decomposition as dec
 
 np.random.seed(1234)
 tf.random.set_seed(1234)
@@ -108,8 +109,8 @@ def main():
     volNot_h_returns =hour_df.volumeNotional.to_numpy()
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
-    dlag_opt = [1]
-    use_hlag = [4, 5, 6]
+    dlag_opt = [2]
+    use_hlag = [5]
 
     # dlag_opt = [2]
     # use_hlag = [2]
@@ -154,6 +155,8 @@ def main():
             X_pp = pp.MinMaxScaler().fit(Xlist)
             y_pp = pp.MinMaxScaler().fit(y_raw)
             Xvoortest = X_pp.transform(Xlist)
+            pca = dec.PCA(n_components=0.9)
+            Xvoortest = pca.fit_transform(Xvoortest)
             yvoortest = y_pp.transform(y_raw)
 
             Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=365, shuffle=False)
@@ -164,7 +167,7 @@ def main():
 
             best_val_mse = np.inf
             best_val_mse_sd = 0
-            best_K = [200, 100, 50, 20, 5]
+            best_K = [200, 100, 50, 20]
 
             K_opt = [
                 [100, 50, 20, 10],
@@ -176,7 +179,7 @@ def main():
             ]
 
             # Select layer size using validation set
-            if True:
+            if False:
                 Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
                 yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
@@ -213,7 +216,7 @@ def main():
             best_final_mse = np.inf
 
             # Robustness of final model
-            n_tests = 10
+            n_tests = 1
             final_results = np.zeros(n_tests)
             for i in range(n_tests):
                 nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)

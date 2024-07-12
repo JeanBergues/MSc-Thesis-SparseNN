@@ -19,7 +19,7 @@ ks.utils.set_random_seed(1234)
 pt.manual_seed(1234)
 
 
-def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 1000, verbose=False, divide_result = 1):
+def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 100000, verbose=False, divide_result = 8):
     initial_theta = theta
     dense_W = W
     dense_theta = initial_theta
@@ -170,7 +170,7 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
 
     # Set the first value of each row to true if all other values in the row are false
     set_first_true_array = np.full_like(m_tilde_first_only, False)
-    set_first_true_array[:,0] = np.sum(m_tilde_first_only, axis=1) < 1
+    set_first_true_array[:,-1] = np.sum(m_tilde_first_only, axis=1) < 1
     m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
     m_tilde = w_m[m_tilde_first_only]
 
@@ -181,8 +181,8 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100)):
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters)
+def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto"):
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, torch_seed=1234, lambda_start=l_start)
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     res_k = np.zeros(len(history))
@@ -197,8 +197,7 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
     return (res_k, res_val, res_l)
 
 
-def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-3):
-    dense = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation=activation, K=K, verbose=1, patience=patiences[0], epochs=max_iters[0])
+def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-3):
     # dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError())
 
     starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=10)
@@ -284,15 +283,18 @@ for d_nlags in dlag_opt:
         n_repeats = 1
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
-        best_K = [200, 150, 100, 50, 20]
+        best_K = [200, 100, 50, 20]
 
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
 
         # Run for M variations
-        HP_opts = [0.5, 1, 2]
+        HP_opts = [0.001, 0.0005]
         HP_results = []
 
         USE_PAPER_LASSONET = True
+        if not USE_PAPER_LASSONET:
+            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000)
+            initial_model.save('temp_network.keras')
 
         for m in HP_opts:
             np.random.seed(1234)
@@ -302,10 +304,11 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask(
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.01, M=m, patiences=(100, 10), max_iters=(1000, 20))
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=m, M=5, patiences=(100, 10), max_iters=(1000, 100))
             else:
+                network = ks.models.load_model('temp_network.keras')
                 res_k, res_val, res_l = return_LassoNet_mask(
-                    Xt, Xv, yt, yv, K=best_K, pm=0.005, M=1, patiences=(100, 10), max_iters=(1000, m), print_path=True)
+                    network, Xt, Xv, yt, yv, K=best_K, pm=m, M=10, patiences=(100, 10), max_iters=(1000, 2000), print_path=True, print_lambda=True)
             
             HP_results.append((res_k, res_val, res_l))
 
