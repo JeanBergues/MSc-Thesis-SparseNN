@@ -108,8 +108,8 @@ def main():
     volNot_h_returns =hour_df.volumeNotional.to_numpy()
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
-    dlag_opt = [1]
-    use_hlag = [1, 2, 3, 4]
+    dlag_opt = [1, 2]
+    use_hlag = [0, 1, 2, 3, 4, 5]
 
     # dlag_opt = [2]
     # use_hlag = [2]
@@ -221,7 +221,7 @@ def main():
             n_tests = 10
             final_results = np.zeros(n_tests)
             for i in range(n_tests):
-                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
                 test_f = nn.predict(Xtest).ravel()
                 test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
                 experiment_mse = mt.mean_squared_error(ytest, test_f)
