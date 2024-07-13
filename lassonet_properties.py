@@ -286,15 +286,20 @@ for d_nlags in dlag_opt:
         best_K = [200, 100, 50, 20]
 
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+        tXt = tf.convert_to_tensor(Xt)
+        tXv = tf.convert_to_tensor(Xv)
+        tyt = tf.convert_to_tensor(yt)
+        tyv = tf.convert_to_tensor(yv)
 
         # Run for M variations
-        HP_opts = [0.001, 0.0005]
+        HP_opts = [0.02]
         HP_results = []
 
-        USE_PAPER_LASSONET = True
+        USE_PAPER_LASSONET = False
         if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000)
+            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, k=Xt.shape[1], activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000)
             initial_model.save('temp_network.keras')
+            initial_model_best_weights = initial_model.get_weights()
 
         for m in HP_opts:
             np.random.seed(1234)
@@ -304,11 +309,14 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask(
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=m, M=5, patiences=(100, 10), max_iters=(1000, 100))
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.001, M=m, patiences=(100, 5), max_iters=(10000, 1000), l_start=200)
             else:
-                network = ks.models.load_model('temp_network.keras')
+                # network = ks.models.load_model('temp_network.keras')
+                # network.set_weights(initial_model_best_weights)
+                # res_k, res_val, res_l = return_LassoNet_mask(
+                #     network, Xt, Xv, yt, yv, K=best_K, pm=m, M=10, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True)
                 res_k, res_val, res_l = return_LassoNet_mask(
-                    network, Xt, Xv, yt, yv, K=best_K, pm=m, M=10, patiences=(100, 10), max_iters=(1000, 2000), print_path=True, print_lambda=True)
+                    initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=m, M=10, patiences=(100, 5), max_iters=(10000, 100), print_path=True, print_lambda=True)
             
             HP_results.append((res_k, res_val, res_l))
 
