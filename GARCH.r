@@ -57,7 +57,7 @@ best_b <- 0
 try_p <- 1:2
 try_o <- 0:2
 try_q <- 0:2
-try_a <- 0:2
+try_a <- 1:2
 try_b <- 0:2
 
 estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {

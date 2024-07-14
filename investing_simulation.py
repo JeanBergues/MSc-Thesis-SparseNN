@@ -59,16 +59,17 @@ ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
 print("Data has been fully loaded")
 
 best_model_np = [
-    'final_forecasts/SKIPX_1_0_FORECAST',
-    'final_forecasts/SKIPX_1_1_FORECAST',
-    'final_forecasts/SKIPX_1_2_FORECAST',
-    'final_forecasts/SKIPX_1_3_FORECAST'
+    'final_forecasts/SKIPXV_1_0_FORECAST',
+    'final_forecasts/SKIPXV_1_1_FORECAST',
+    'final_forecasts/SKIPXV_1_2_FORECAST',
+    'final_forecasts/SKIPXV_1_3_FORECAST',
+    'final_forecasts/SKIPXV_1_4_FORECAST'
 ]
 
 best_model_txt = [
     'final_R_forecasts/MIDAS_test',
     'final_R_forecasts/MIDASX_test',
-    'txt_forecast/garch_day_test',
+    'final_R_forecasts/garch_test',
     'final_R_forecasts/arima_day_test',
     'final_R_forecasts/arimaX_day_test',
 ]
@@ -104,7 +105,7 @@ print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean
 #     print(k)
 #     print(dm.dm_test(ytest, benchmark, v))
 
-leg = ['ANN(1, 0)', 'ANN(1, 1)', 'ANN(1, 2)', 'ANN(1, 3)', 
+leg = ['ANN(1, 0)', 'ANN(1, 1)', 'ANN(1, 2)', 'ANN(1, 3)', 'ANN(1, 4)', 
             'MIDAS', 'MIDASX', 'GARCH', 'ARIMA', 'ARIMAX', 'Long', 'Short']
 
 x_axis = list(range(len(ytest.ravel())))
