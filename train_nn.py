@@ -50,8 +50,8 @@ def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val
     return (value / start_val - 1, path)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, k, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
-    inp = ks.layers.Input(shape=(k,))
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+    inp = ks.layers.Input(shape=(ksize,))
     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, kernel_regularizer=ks.regularizers.L1L2(), name='skip_layer')(inp)
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
@@ -115,7 +115,7 @@ def main():
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/SKIPXX_{d_nlags}_{h_nlags}"
+            EXPERIMENT_NAME = f"final_forecasts/SKIPY_{d_nlags}_{h_nlags}"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -166,6 +166,8 @@ def main():
             best_K = [200, 100, 50, 20, 5]
 
             K_opt = [
+                [100, 50, 20],
+                [200, 100, 50],
                 [100, 50, 20, 10],
                 [200, 100, 50, 20],
                 [100, 50, 20, 10, 5],
@@ -177,7 +179,7 @@ def main():
             # Select layer size using validation set
             if True:
                 Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-                Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
+                Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=60, shuffle=False)
                 yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
                 for K in K_opt:
@@ -207,9 +209,10 @@ def main():
                 np.savetxt(f'{EXPERIMENT_NAME}_VAL_STATS', np.array([best_val_mse, best_val_mse_sd]))
 
             # Select final model based on small validation set
-            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
+            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=60, shuffle=False)
             yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
+            best_final_val_mse = np.inf
             best_final_mse = np.inf
 
             # Robustness of final model
@@ -220,14 +223,16 @@ def main():
                 test_f = nn.predict(Xtest).ravel()
                 test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
                 experiment_mse = mt.mean_squared_error(ytest, test_f)
-                print(f"FINAL MSE: {experiment_mse:.3f}")
+                print(f"TEST MSE: {experiment_mse:.3f}")
                 final_results[i] = experiment_mse
 
                 val_f = nn.predict(Xv).ravel()
                 val_f = y_pp.inverse_transform(val_f.reshape(1, -1)).ravel()
                 val_mse = mt.mean_squared_error(yval, val_f)
-                if val_mse < best_final_mse:
-                    best_final_mse = val_mse
+                print(f"VAL MSE: {val_mse:.3f}")
+                if val_mse < best_final_val_mse:
+                    best_final_val_mse = val_mse
+                    best_final_mse = experiment_mse
                     test_forecast = test_f
             
             print("FINAL RESULTS")
