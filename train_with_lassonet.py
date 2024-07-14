@@ -275,7 +275,7 @@ def main():
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/LASSONET_{d_nlags}_{h_nlags}"
+            EXPERIMENT_NAME = f"final_forecasts/LASSONET_6"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -320,10 +320,10 @@ def main():
 
             n_repeats = 1
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
-            best_K = [200, 100, 50, 20]
+            best_K = [200, 100, 50, 20, 10, 5]
 
             Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.005, M=50, patiences=(100, 5), max_iters=(10000, 10), n_features=0) != 0)
+            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.005, M=20, patiences=(100, 5), max_iters=(10000, 10), n_features=0, l_start='auto') != 0)
             print(f"Selected {np.sum(mask)} features.")
             Xtm = Xtrain[:,mask]
             Xtt = Xtest[:,mask]

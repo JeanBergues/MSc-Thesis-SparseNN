@@ -61,7 +61,7 @@ print("Data has been fully loaded")
 best_model_np = [
     'final_forecasts/SKIPXV_1_0_FORECAST',
     'final_forecasts/SKIPXV_1_1_FORECAST',
-    'final_forecasts/SKIPXV_1_2_FORECAST',
+    'final_forecasts/LASSONET_6_FORECAST',
     'final_forecasts/SKIPXV_1_3_FORECAST',
     'final_forecasts/SKIPXV_1_4_FORECAST'
 ]
