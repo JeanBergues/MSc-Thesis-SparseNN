@@ -8,3 +8,11 @@ Before recreating any experiments, you first have to prepare the data.
 4) Run pct_diff_btc_data.py, which produces pct_btc_day.csv and pct_btc_hour.csv, where the data has been transformed into simple returns
 
 Now you can reproduce the experiments.
+
+Reproducing the competing models:
+ARIMA and ARIMAX: Run ARIMA.R
+GARCH: Run GARCH.R
+MIDAS: Run MIDAS.R
+MIDASX: Run MIDASX.R
+
+These models will write their forecasts to the folder final_R_forecasts
