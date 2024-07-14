@@ -1,15 +1,13 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import seaborn as sns
-from time import perf_counter_ns
 import keras as ks
 import sklearn.preprocessing as pp
 import sklearn.model_selection as ms
 import sklearn.metrics as mt
 import lassonet as lsn
 import torch as pt
+from time import perf_counter_ns
 
 np.random.seed(1234)
 tf.random.set_seed(1234)
@@ -211,20 +209,26 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     return (theta_out, W_out)
 
 
-def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto"):
+def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto", n_features=0):
     lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start)
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
+    lowest_obj = np.inf
 
-    res_k = np.zeros(len(history))
-    res_val = np.zeros(len(history))
-    res_l = np.zeros(len(history))
+    for h in history:
+        if h.val_loss < lowest_obj:
+            lowest_obj = h.val_loss
+            obj_h = h.selected.data.numpy()
+        if h.selected.sum() <= n_features:
+            frac_h = h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
+        else:
+            backup_h = h.selected.data.numpy()
 
-    for i, h in enumerate(history):
-        res_k[i] = h.selected.sum()
-        res_val[i] = h.val_loss
-        res_l[i] = h.lambda_
-
-    return (res_k, res_val, res_l)
+    if np.sum(obj_h) > 0:
+        print("Minimized objective!")
+        return obj_h
+    else:
+        print("Fractional features!")
+        return frac_h
 
 
 def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-2, starting_lambda=None):
@@ -243,139 +247,129 @@ def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='rel
 
 ###############################################################################################################################################################################################
 
-day_df = pd.read_csv(f'pct_btc_day.csv')
-hour_df = pd.read_csv(f'pct_btc_hour.csv')
+def main():
+    day_df = pd.read_csv(f'pct_btc_day.csv')
+    hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
-freq = 24
+    freq = 24
 
-# raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
-open_returns =  day_df.open.to_numpy()
-high_returns =  day_df.high.to_numpy()
-low_returns =   day_df.low.to_numpy()
-close_returns = day_df.close.to_numpy()
-vol_returns =   day_df.volume.to_numpy()
-volNot_returns =day_df.volumeNotional.to_numpy()
-trades_returns =day_df.tradesDone.to_numpy()
+    # raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
+    open_returns =  day_df.open.to_numpy()
+    high_returns =  day_df.high.to_numpy()
+    low_returns =   day_df.low.to_numpy()
+    close_returns = day_df.close.to_numpy()
+    vol_returns =   day_df.volume.to_numpy()
+    volNot_returns =day_df.volumeNotional.to_numpy()
+    trades_returns =day_df.tradesDone.to_numpy()
 
-open_h_returns =  hour_df.open.to_numpy()
-high_h_returns =  hour_df.high.to_numpy()
-low_h_returns =   hour_df.low.to_numpy()
-close_h_returns = hour_df.close.to_numpy()
-vol_h_returns =   hour_df.volume.to_numpy()
-volNot_h_returns =hour_df.volumeNotional.to_numpy()
-trades_h_returns =hour_df.tradesDone.to_numpy()
+    open_h_returns =  hour_df.open.to_numpy()
+    high_h_returns =  hour_df.high.to_numpy()
+    low_h_returns =   hour_df.low.to_numpy()
+    close_h_returns = hour_df.close.to_numpy()
+    vol_h_returns =   hour_df.volume.to_numpy()
+    volNot_h_returns =hour_df.volumeNotional.to_numpy()
+    trades_h_returns =hour_df.tradesDone.to_numpy()
 
-dlag_opt = [2]
-use_hlag = [5]
+    dlag_opt = [2]
+    use_hlag = [5]
 
-for d_nlags in dlag_opt:
-    for h_nlags in use_hlag:
-        bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
-        y_raw = close_returns[bound_lag:].reshape(-1, 1)
-        Xlist = np.arange(1, len(y_raw) + 1).reshape(-1, 1)
-        if h_nlags > 0:
-            for t_h in range(0, h_nlags):
-                Xlist = np.concatenate(
-                    [
-                        Xlist,
-                        open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        close_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        vol_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        volNot_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                        trades_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
-                    ], axis=1)
-        if d_nlags > 0:
-            for t in range(0, d_nlags):
-                Xlist = np.concatenate(
-                    [
-                        Xlist,
-                        open_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        high_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        close_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        vol_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        volNot_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                        trades_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
-                    ], axis=1)
+    for d_nlags in dlag_opt:
+        for h_nlags in use_hlag:
+            EXPERIMENT_NAME = f"final_forecasts/LASSONET_{d_nlags}_{h_nlags}"
 
-        Xlist = Xlist[:, 1:]
-        X_pp = pp.MinMaxScaler().fit(Xlist)
-        y_pp = pp.MinMaxScaler().fit(y_raw)
-        Xvoortest = X_pp.transform(Xlist)
-        yvoortest = y_pp.transform(y_raw)
+            bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
+            y_raw = close_returns[bound_lag:].reshape(-1, 1)
+            Xlist = np.arange(1, len(y_raw) + 1).reshape(-1, 1)
+            if h_nlags > 0:
+                for t_h in range(0, h_nlags):
+                    Xlist = np.concatenate(
+                        [
+                            # [(bound_lag*freq-1-t_h):(-1-t_h):freq]
+                            # [(bound_lag*freq-t_h):(-t_h):freq]
+                            Xlist,
+                            open_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            high_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            low_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            close_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            vol_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            volNot_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                            trades_h_returns[(bound_lag*freq-1-t_h):(-1-t_h):freq].reshape(-1, 1),
+                        ], axis=1)
+            if d_nlags > 0:
+                for t in range(0, d_nlags):
+                    Xlist = np.concatenate(
+                        [
+                            Xlist,
+                            open_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            high_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            low_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            close_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            vol_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            volNot_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                            trades_returns[bound_lag-1-t:-1-t].reshape(-1, 1),
+                        ], axis=1)
 
-        Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=365, shuffle=False)
-        print("Data has been fully transformed and split")
+            Xlist = Xlist[:, 1:]
+            X_pp = pp.MinMaxScaler().fit(Xlist)
+            y_pp = pp.MinMaxScaler().fit(y_raw)
+            Xvoortest = X_pp.transform(Xlist)
+            yvoortest = y_pp.transform(y_raw)
 
-        n_repeats = 1
-        ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
+            Xtrain, Xtest, ytrain, ytest = ms.train_test_split(Xvoortest, yvoortest, test_size=365, shuffle=False)
+            print("Data has been fully transformed and split")
 
-        best_K = [200, 100, 50, 20, 5]
-        # best_K = [200, 100]
+            n_repeats = 1
+            ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
+            best_K = [200, 100, 50, 20]
 
-        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-        tXt = tf.convert_to_tensor(Xt)
-        tXv = tf.convert_to_tensor(Xv)
-        tyt = tf.convert_to_tensor(yt)
-        tyv = tf.convert_to_tensor(yv)
+            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.005, M=50, patiences=(100, 5), max_iters=(10000, 10), n_features=0) != 0)
+            print(f"Selected {np.sum(mask)} features.")
+            Xtm = Xtrain[:,mask]
+            Xtt = Xtest[:,mask]
 
-        # Run for M variations
-        HP_opts = [50, 100, 200]
-        HP_results = []
+            # Select final model based on small validation set
+            Xt, Xv, yt, yv = ms.train_test_split(Xtm, ytrain, test_size=30, shuffle=False)
+            yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
+            yvaltrain = y_pp.inverse_transform(ytrain.reshape(1, -1)).ravel()
 
-        USE_PAPER_LASSONET = True
-        if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, k=Xt.shape[1], activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000)
-            initial_model.save('temp_network.keras')
-            initial_model_best_weights = initial_model.get_weights()
+            best_final_val_mse = np.inf
+            best_final_mse = np.inf
 
-        for hp in HP_opts:
-            np.random.seed(1234)
-            tf.random.set_seed(1234)
-            ks.utils.set_random_seed(1234)
-            pt.manual_seed(1234)
+            # Robustness of final model
+            n_tests = 10
+            final_results = np.zeros(n_tests)
+            for i in range(n_tests):
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
+                test_f = nn.predict(Xtt).ravel()
+                test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+                experiment_mse = mt.mean_squared_error(ytest, test_f)
+                final_results[i] = experiment_mse
 
-            if USE_PAPER_LASSONET:
-                res_k, res_val, res_l = paper_lassonet_mask(
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.001, M=hp, patiences=(100, 5), max_iters=(10000, 10), l_start=50)
-            else:
-                network = ks.models.load_model('temp_network.keras')
-                network.set_weights(initial_model_best_weights)
-                res_k, res_val, res_l = return_LassoNet_mask(
-                    network, Xt, Xv, yt, yv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 100), print_path=True, print_lambda=True, starting_lambda=None)
-                # res_k, res_val, res_l = return_LassoNet_mask(
-                #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
+                val_f = nn.predict(Xv).ravel()
+                val_f = y_pp.inverse_transform(val_f.reshape(1, -1)).ravel()
+                val_mse = mt.mean_squared_error(yval, val_f)
+
+                train_f = nn.predict(Xtm).ravel()
+                train_f = y_pp.inverse_transform(train_f.reshape(1, -1)).ravel()
+                train_mse = mt.mean_squared_error(yvaltrain, train_f)
+
+                print(f"TEST MSE: {experiment_mse:.3f}")
+                print(f"VAL MSE: {val_mse:.3f}")
+                print(f"TRAIN MSE: {train_mse:.3f}")
+                if val_mse < best_final_val_mse:
+                    best_final_val_mse = val_mse
+                    best_final_mse = experiment_mse
+                    test_forecast = test_f
             
-            HP_results.append((res_k, res_val, res_l))
+            print("FINAL RESULTS")
+            print(f"AVERAGE TEST MSE = {np.mean(final_results):.3f}")
+            print(f"AVERAGE TEST SD = {np.std(final_results):.3f}")
+            print(f"BEST TEST MSE = {mt.mean_squared_error(ytest, test_forecast):.3f}")
+            print(f"Only mean MSE = {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+            
+            np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse]))
+            np.save(f'{EXPERIMENT_NAME}_FORECAST', test_forecast.ravel())
 
-        # Plot selected features against mse
-        fig = plt.figure(figsize=(12, 4))
-        for m, res in zip(HP_opts, HP_results):
-            fig = sns.lineplot(x=np.array(res[0]), y=np.array(res[1]), drawstyle='steps-pre', size=10)
-        
-        # plt.legend(labels=[f"M={l}" for l in HP_opts])
-        legd = fig.get_legend()
-        for t, l in zip(legd.texts, HP_opts):
-            t.set_text(f"M={l}")
-
-        sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
-        plt.xlabel("selected features")
-        plt.ylabel("mse")
-        plt.show()
-
-        # Plot selected features against lambda
-        fig = plt.figure(figsize=(12, 4))
-        for m, res in zip(HP_opts, HP_results):
-            fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[0]), drawstyle='steps-pre', size=10)
-        
-        # plt.legend(labels=[f"M={l}" for l in HP_opts])
-        legd = fig.get_legend()
-        for t, l in zip(legd.texts, HP_opts):
-            t.set_text(f"M={l}")
-
-        sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
-        plt.xlabel(r'$\lambda$')
-        plt.ylabel("selected features")
-        plt.show()
+if __name__ == '__main__':
+    main()
