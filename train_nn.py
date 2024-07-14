@@ -10,7 +10,6 @@ np.random.seed(1234)
 tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
-
 def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
     value = start_val
     path = np.zeros(len(real))
@@ -54,7 +53,7 @@ def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val
 def return_MLP_skip_estimator(Xt, Xv, yt, yv, k, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     inp = ks.layers.Input(shape=(k,))
     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, kernel_regularizer=ks.regularizers.L1L2(), name='skip_layer')(inp)
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     if len(K) > 1:
         for k in K[1:]:
@@ -116,7 +115,7 @@ def main():
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/SKIPXV_{d_nlags}_{h_nlags}"
+            EXPERIMENT_NAME = f"final_forecasts/SKIPXX_{d_nlags}_{h_nlags}"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -180,15 +179,11 @@ def main():
                 Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
                 Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
                 yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
-                tXtt = tf.convert_to_tensor(Xtt)
-                tXtv = tf.convert_to_tensor(Xtv)
-                tytt = tf.convert_to_tensor(ytt)
-                tytv = tf.convert_to_tensor(ytv)
 
                 for K in K_opt:
                     mses = np.zeros(10)
                     for i in range(len(mses)):
-                        predictor = return_MLP_skip_estimator(tXtt, tXtv, tytt, tytv, Xt.shape[1], verbose=0, K=K, activation='tanh', epochs=20_000, patience=50)
+                        predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, Xt.shape[1], verbose=0, K=K, activation='tanh', epochs=20_000, patience=50)
                         ypred = predictor.predict(Xv).ravel()
                         ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
                         mse = mt.mean_squared_error(yval, ypred)

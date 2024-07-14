@@ -11,12 +11,42 @@ import sklearn.metrics as mt
 import lassonet as lsn
 import torch as pt
 
-from train_nn import calc_investment_returns, return_MLP_skip_estimator
-
 np.random.seed(1234)
 tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 pt.manual_seed(1234)
+
+
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, k, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+    inp = ks.layers.Input(shape=(k,))
+    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
+    if len(K) > 1:
+        for k in K[1:]:
+            gw = ks.layers.Dense(units=k, activation=activation)(gw)   
+
+    merge = ks.layers.Concatenate()([skip, gw])
+    output = ks.layers.Dense(units=1)(merge)
+
+    # Implement early stopping
+    early_stop = ks.callbacks.EarlyStopping(
+        monitor="val_loss",
+        min_delta=0,
+        patience=patience,
+        verbose=0,
+        mode="auto",
+        baseline=None,
+        restore_best_weights=True,
+        start_from_epoch=0,
+    )
+
+    # Initial dense training
+    nn = ks.models.Model(inputs=inp, outputs=output)
+    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+    nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
+
+    return nn
 
 
 def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 100000, verbose=False, divide_result = 8):
