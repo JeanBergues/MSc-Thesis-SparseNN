@@ -65,7 +65,7 @@ best_model_np = [
     'final_forecasts/SKIPDP_1_3_FORECAST',
     'final_forecasts/SKIPDP_1_4_FORECAST',
     'final_forecasts/SKIPDP_1_5_FORECAST',
-    'final_forecasts/LASSONET_2_7_BIG_FORECAST',
+    'final_forecasts/LASSONET_2_14_SMALL_FORECAST',
 ]
 
 best_model_txt = [
@@ -78,7 +78,7 @@ best_model_txt = [
 
 paths_to_plot = {}
 series_to_test = {}
-WITH_STRATEGY = False
+WITH_STRATEGY = True
 
 for m in best_model_np:
     fc = np.load(f'{m}.npy')[-365:]

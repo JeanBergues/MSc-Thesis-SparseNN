@@ -272,12 +272,12 @@ def main():
     volNot_h_returns =hour_df.volumeNotional.to_numpy()
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
-    dlag_opt = [2]
+    dlag_opt = [1]
     use_hlag = [5]
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/LASSONET_2_7_BIG"
+            EXPERIMENT_NAME = f"final_forecasts/LASSONET_2_14_SMALL"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -325,10 +325,11 @@ def main():
             best_K = [200, 100, 50, 20]
 
             Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(10000, 5), n_features=7, l_start='auto') != 0)
+            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(10000, 5), n_features=14, l_start='auto') != 0)
             print(f"Selected {np.sum(mask)} features.")
             Xtm = Xtrain[:,mask]
             Xtt = Xtest[:,mask]
+            np.save(f'{EXPERIMENT_NAME}_MASK', mask)
 
             # Select final model based on small validation set
             Xt, Xv, yt, yv = ms.train_test_split(Xtm, ytrain, test_size=30, shuffle=False)
