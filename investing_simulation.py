@@ -59,29 +59,32 @@ ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
 print("Data has been fully loaded")
 
 best_model_np = [
-    'final_forecasts/SKIPXV_1_0_FORECAST',
-    'final_forecasts/SKIPXV_1_1_FORECAST',
-    'final_forecasts/LASSONET_6_FORECAST',
-    'final_forecasts/SKIPXV_1_3_FORECAST',
-    'final_forecasts/SKIPXV_1_4_FORECAST'
+    'final_forecasts/SKIPDP_1_0_FORECAST',
+    'final_forecasts/SKIPDP_1_1_FORECAST',
+    'final_forecasts/SKIPDP_1_2_FORECAST',
+    'final_forecasts/SKIPDP_1_3_FORECAST',
+    'final_forecasts/SKIPDP_1_4_FORECAST',
+    'final_forecasts/SKIPDP_1_5_FORECAST',
+    'final_forecasts/LASSONET_2_7_BIG_FORECAST',
 ]
 
 best_model_txt = [
-    'final_R_forecasts/MIDAS_test',
-    'final_R_forecasts/MIDASX_test',
-    'final_R_forecasts/garch_test',
-    'final_R_forecasts/arima_day_test',
-    'final_R_forecasts/arimaX_day_test',
+    # 'final_R_forecasts/MIDAS_test',
+    # 'final_R_forecasts/MIDASX_test',
+    # 'final_R_forecasts/garch_test',
+    # 'final_R_forecasts/arima_day_test',
+    # 'final_R_forecasts/arimaX_day_test',
 ]
 
 paths_to_plot = {}
 series_to_test = {}
+WITH_STRATEGY = False
 
 for m in best_model_np:
     fc = np.load(f'{m}.npy')[-365:]
     print(f"Examining {m}")
     print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=False, ytrain=ytrain)
+    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=WITH_STRATEGY, ytrain=ytrain)
     print(f"RETURN: {fret*100:.2f}")
     paths_to_plot[m] = investing_results
     series_to_test[m] = fc
@@ -90,7 +93,7 @@ for m in best_model_txt:
     fc = np.loadtxt(f'{m}.txt', delimiter=' ').ravel()[-365:]
     print(f"Examining {m}")
     print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=False, ytrain=ytrain)
+    fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=WITH_STRATEGY, ytrain=ytrain)
     print(f"RETURN: {fret*100:.2f}")
     paths_to_plot[m] = investing_results
     series_to_test[m] = fc
@@ -105,8 +108,7 @@ print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean
 #     print(k)
 #     print(dm.dm_test(ytest, benchmark, v))
 
-leg = ['ANN(1, 0)', 'ANN(1, 1)', 'ANN(1, 2)', 'ANN(1, 3)', 'ANN(1, 4)', 
-            'MIDAS', 'MIDASX', 'GARCH', 'ARIMA', 'ARIMAX', 'Long', 'Short']
+leg = ['DNN(1,0)', 'DNN(1,1)', 'DNN(1,2)', 'DNN(1,3)', 'DNN(1,4)', 'DNN(1,5)', 'LASSO(2)', 'Long', 'Short']
 
 x_axis = list(range(len(ytest.ravel())))
 fig = plt.figure(figsize=(16, 6))
@@ -126,7 +128,7 @@ sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
 plt.xlabel("Days")
 plt.ylabel("Cumulative returns")
 
-# plt.savefig('plots/stepret.eps', format='eps')
+# plt.savefig('plots/DNN2_STRAT.eps', format='eps')
 plt.show()
 
 # x_axis = list(range(len(ytest.ravel())))
