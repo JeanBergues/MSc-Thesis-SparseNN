@@ -312,7 +312,7 @@ for d_nlags in dlag_opt:
         n_repeats = 1
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
-        best_K = [200, 100, 50, 20, 5]
+        best_K = [100, 50, 20, 10, 5]
         # best_K = [200, 100]
 
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
@@ -322,8 +322,9 @@ for d_nlags in dlag_opt:
         tyv = tf.convert_to_tensor(yv)
 
         # Run for M variations
-        HP_opts = [50, 100, 200]
+        HP_opts = [0.02, 0.01, 0.005, 0.001]
         HP_results = []
+        EXPERIMENT_NAME = "LN_LR_PAPER"
 
         USE_PAPER_LASSONET = True
         if not USE_PAPER_LASSONET:
@@ -339,7 +340,7 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask(
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.001, M=hp, patiences=(100, 5), max_iters=(10000, 10), l_start=50)
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=hp, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start=5)
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
@@ -351,31 +352,52 @@ for d_nlags in dlag_opt:
             HP_results.append((res_k, res_val, res_l))
 
         # Plot selected features against mse
-        fig = plt.figure(figsize=(12, 4))
+        fig = plt.figure(figsize=(6, 3))
         for m, res in zip(HP_opts, HP_results):
             fig = sns.lineplot(x=np.array(res[0]), y=np.array(res[1]), drawstyle='steps-pre', size=10)
         
         # plt.legend(labels=[f"M={l}" for l in HP_opts])
         legd = fig.get_legend()
         for t, l in zip(legd.texts, HP_opts):
-            t.set_text(f"M={l}")
+            t.set_text(r"$\alpha$" + f"={l}")
 
         sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
         plt.xlabel("selected features")
         plt.ylabel("mse")
-        plt.show()
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.eps', format='eps', bbox_inches='tight')
+        plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.png', format='png', bbox_inches='tight')
+        # plt.show()
 
         # Plot selected features against lambda
-        fig = plt.figure(figsize=(12, 4))
+        fig = plt.figure(figsize=(6, 3))
         for m, res in zip(HP_opts, HP_results):
             fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[0]), drawstyle='steps-pre', size=10)
         
         # plt.legend(labels=[f"M={l}" for l in HP_opts])
         legd = fig.get_legend()
         for t, l in zip(legd.texts, HP_opts):
-            t.set_text(f"M={l}")
+            t.set_text(r"$\alpha$" + f"={l}")
 
         sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
         plt.xlabel(r'$\lambda$')
         plt.ylabel("selected features")
-        plt.show()
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.eps', format='eps', bbox_inches='tight')
+        plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.png', format='png', bbox_inches='tight')
+        # plt.show()
+
+        # Plot mse against lambda
+        fig = plt.figure(figsize=(6, 3))
+        for m, res in zip(HP_opts, HP_results):
+            fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[1]), drawstyle='steps-pre', size=10)
+        
+        # plt.legend(labels=[f"M={l}" for l in HP_opts])
+        legd = fig.get_legend()
+        for t, l in zip(legd.texts, HP_opts):
+            t.set_text(r"$\alpha$" + f"={l}")
+
+        sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
+        plt.xlabel(r'$\lambda$')
+        plt.ylabel("mse")
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.eps', format='eps', bbox_inches='tight')
+        plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.png', format='png', bbox_inches='tight')
+        # plt.show()

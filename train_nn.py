@@ -10,45 +10,6 @@ np.random.seed(1234)
 tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
-def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
-    value = start_val
-    path = np.zeros(len(real))
-    prev_pos = 1
-    mean_f = 0
-
-    if use_thresholds:
-        last_seen = list(ytrain.ravel()[-14:])
-
-    for t, (f, r) in enumerate(zip(forecast, real)):
-        pos = prev_pos
-        if use_thresholds:
-            seen = np.array(last_seen[-7:])
-            lb = np.mean(seen) - np.std(seen)
-            ub = np.mean(seen) + np.std(seen)
-            last_seen.append(r[0])
-
-            if f < lb:
-                pos = -1
-            elif f > ub:
-                pos = 1
-            else:
-                pos = 0 if allow_empty else prev_pos
-        else:
-            if f < mean_f:
-                pos = -1
-            elif f > mean_f:
-                pos = 1
-            else:
-                pos = 0 if allow_empty else prev_pos
-
-        if pos != prev_pos: value = value * (1 - trad_cost)
-        prev_pos = pos
-
-        value = value * (1 + pos * r[0]/100)
-        path[t] = value
-
-    return (value / start_val - 1, path)
-
 
 def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     inp = ks.layers.Input(shape=(ksize,))
@@ -57,7 +18,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     if len(K) > 1:
         for k in K[1:]:
-            dp = ks.layers.Dropout(0.1)(gw)
+            dp = ks.layers.Dropout(0.05)(gw)
             gw = ks.layers.Dense(units=k, activation=activation)(dp)   
 
     merge = ks.layers.Concatenate()([skip, gw])
@@ -116,7 +77,10 @@ def main():
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/SKIPTEST_{d_nlags}_{h_nlags}"
+            np.random.seed(1234)
+            tf.random.set_seed(1234)
+            ks.utils.set_random_seed(1234)
+            EXPERIMENT_NAME = f"final_forecasts/SKIPDP_{d_nlags}_{h_nlags}"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -167,11 +131,11 @@ def main():
             best_K = [200, 100, 50, 20, 5]
 
             K_opt = [
-                # [100, 50, 20, 10],
+                [100, 50, 20, 10],
                 [200, 100, 50, 20],
-                # [100, 50, 20, 10, 5],
+                [100, 50, 20, 10, 5],
                 [200, 100, 50, 20, 5],
-                # [100, 75, 50, 20, 10, 5],
+                [100, 75, 50, 20, 10, 5],
                 [200, 100, 50, 20, 10, 5],
             ]
 
@@ -247,7 +211,7 @@ def main():
             print(f"BEST TEST MSE = {mt.mean_squared_error(ytest, test_forecast):.3f}")
             print(f"Only mean MSE = {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
             
-            np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse]))
+            np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse, best_final_val_mse]))
             np.save(f'{EXPERIMENT_NAME}_FORECAST', test_forecast.ravel())
 
 if __name__ == '__main__':
