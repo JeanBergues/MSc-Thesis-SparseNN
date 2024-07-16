@@ -11,7 +11,7 @@ tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+def return_MLP_merge_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
     inp = ks.layers.Input(shape=(ksize,))
     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
@@ -43,6 +43,71 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
 
     return nn
 
+def return_MLP_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0):
+    inp = ks.layers.Input(shape=(ksize,))
+    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
+    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
+    if len(K) > 1:
+        for k in K[1:]:
+            dp = ks.layers.Dropout(drop)(gw)
+            gw = ks.layers.Dense(units=k, activation=activation)(dp)   
+
+    output = ks.layers.Dense(units=1)(gw)
+
+    # Implement early stopping
+    early_stop = ks.callbacks.EarlyStopping(
+        monitor="val_loss",
+        min_delta=0,
+        patience=patience,
+        verbose=0,
+        mode="auto",
+        baseline=None,
+        restore_best_weights=True,
+        start_from_epoch=0,
+    )
+
+    # Initial dense training
+    nn = ks.models.Model(inputs=inp, outputs=output)
+    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+    nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
+
+    return nn
+
+
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0, use_L1 = False):
+    inp = ks.layers.Input(shape=(ksize,))
+    if use_L1:
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    else:
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
+
+    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
+    if len(K) > 1:
+        for k in K[1:]:
+            dp = ks.layers.Dropout(drop)(gw)
+            gw = ks.layers.Dense(units=k, activation=activation)(dp)   
+
+    last_node = ks.layers.Dense(units=1)(gw)
+    output = ks.layers.Add()([skip, last_node])
+
+    # Implement early stopping
+    early_stop = ks.callbacks.EarlyStopping(
+        monitor="val_loss",
+        min_delta=0.01,
+        patience=patience,
+        verbose=0,
+        mode="auto",
+        baseline=None,
+        restore_best_weights=True,
+        start_from_epoch=0,
+    )
+
+    # Initial dense training
+    nn = ks.models.Model(inputs=inp, outputs=output)
+    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+    nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
+
+    return nn
 
 ###############################################################################################################################################################################################
 
@@ -69,18 +134,18 @@ def main():
     volNot_h_returns =hour_df.volumeNotional.to_numpy()
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
-    dlag_opt = [1, 2]
-    use_hlag = [0, 1, 2, 3, 4, 5]
+    # dlag_opt = [1, 2]
+    # use_hlag = [0, 1, 2, 3, 4, 5]
 
-    # dlag_opt = [2]
-    # use_hlag = [2]
+    dlag_opt = [2]
+    use_hlag = [0]
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
             np.random.seed(1234)
             tf.random.set_seed(1234)
             ks.utils.set_random_seed(1234)
-            EXPERIMENT_NAME = f"final_forecasts/SKIPDP_{d_nlags}_{h_nlags}"
+            EXPERIMENT_NAME = f"final_forecasts/SKIPS_{d_nlags}_{h_nlags}"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -128,7 +193,7 @@ def main():
 
             best_val_mse = np.inf
             best_val_mse_sd = 0
-            best_K = [200, 100, 50, 20, 5]
+            best_K = [50]
 
             K_opt = [
                 [100, 50, 20, 10],
@@ -139,37 +204,37 @@ def main():
                 [200, 100, 50, 20, 10, 5],
             ]
 
-            # Select layer size using validation set
-            if True:
-                Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-                Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
-                yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
+            # # Select layer size using validation set
+            # if True:
+            #     Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+            #     Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
+            #     yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-                for K in K_opt:
-                    mses = np.zeros(10)
-                    for i in range(len(mses)):
-                        predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, Xt.shape[1], verbose=0, K=K, activation='tanh', epochs=20_000, patience=50)
-                        ypred = predictor.predict(Xv).ravel()
-                        ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
-                        mse = mt.mean_squared_error(yval, ypred)
-                        mses[i] = mse
+            #     for K in K_opt:
+            #         mses = np.zeros(10)
+            #         for i in range(len(mses)):
+            #             predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, Xt.shape[1], verbose=0, K=K, activation='tanh', epochs=20_000, patience=50)
+            #             ypred = predictor.predict(Xv).ravel()
+            #             ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
+            #             mse = mt.mean_squared_error(yval, ypred)
+            #             mses[i] = mse
 
-                    print(f"Finished experiment")
-                    print(f"K = {K}")
-                    print(f"MSE: {np.mean(mses):.3f}")
-                    print(f"MSE SDEV: {np.std(mses):.3f}")
+            #         print(f"Finished experiment")
+            #         print(f"K = {K}")
+            #         print(f"MSE: {np.mean(mses):.3f}")
+            #         print(f"MSE SDEV: {np.std(mses):.3f}")
 
-                    if np.mean(mses) < best_val_mse:
-                        best_K = K
-                        best_val_mse = np.mean(mses)
-                        best_val_mse_sd = np.std(mses)
+            #         if np.mean(mses) < best_val_mse:
+            #             best_K = K
+            #             best_val_mse = np.mean(mses)
+            #             best_val_mse_sd = np.std(mses)
 
-                print("VALIDATION RESULTS")
-                print(f"BEST K = {best_K}")
-                print(f"MSE = {best_val_mse:.3f}")
-                print(f"SD = {best_val_mse_sd:.3f}")
-                np.savetxt(f'{EXPERIMENT_NAME}_VAL_K', np.array(best_K))
-                np.savetxt(f'{EXPERIMENT_NAME}_VAL_STATS', np.array([best_val_mse, best_val_mse_sd]))
+            #     print("VALIDATION RESULTS")
+            #     print(f"BEST K = {best_K}")
+            #     print(f"MSE = {best_val_mse:.3f}")
+            #     print(f"SD = {best_val_mse_sd:.3f}")
+            #     np.savetxt(f'{EXPERIMENT_NAME}_VAL_K', np.array(best_K))
+            #     np.savetxt(f'{EXPERIMENT_NAME}_VAL_STATS', np.array([best_val_mse, best_val_mse_sd]))
 
             # Select final model based on small validation set
             Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
@@ -180,10 +245,10 @@ def main():
             best_final_mse = np.inf
 
             # Robustness of final model
-            n_tests = 10
+            n_tests = 5
             final_results = np.zeros(n_tests)
             for i in range(n_tests):
-                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
+                nn = return_MLP_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0)
                 test_f = nn.predict(Xtest).ravel()
                 test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
                 experiment_mse = mt.mean_squared_error(ytest, test_f)

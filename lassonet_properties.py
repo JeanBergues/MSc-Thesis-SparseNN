@@ -17,23 +17,23 @@ ks.utils.set_random_seed(1234)
 pt.manual_seed(1234)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0):
     inp = ks.layers.Input(shape=(ksize,))
-    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
+    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     if len(K) > 1:
         for k in K[1:]:
-            dp = ks.layers.Dropout(0.05)(gw)
+            dp = ks.layers.Dropout(drop)(gw)
             gw = ks.layers.Dense(units=k, activation=activation)(dp)   
 
-    merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=1)(merge)
+    last_node = ks.layers.Dense(units=1)(gw)
+    output = ks.layers.Add()([skip, last_node])
 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=0,
+        min_delta=0.01,
         patience=patience,
         verbose=0,
         mode="auto",
@@ -176,36 +176,29 @@ def train_lasso_path(network,
 
 
 def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
-    # Assert correct sizes
+    # Notation
     theta = theta.ravel()
     d = theta.shape[0]
     K = W.shape[1]
     assert W.shape[0] == d
 
-    # Order the weights
+    # sorted_W = np.flip(np.sort(np.abs(W)), axis=1)
     sorted_W = -np.sort(-np.abs(W))
-
-    # Calculate w_m's
     W_sum = np.cumsum(sorted_W, axis=1)
-    m = np.arange(start=1, stop=K+1)
-    threshold = np.clip((np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum) - np.full_like(W_sum, l), 0, np.inf)
-    w_m = (M * threshold) / (1 + m * (M**2)) 
+
+    m = np.arange(start=0, stop=K+1)
+    padded_Wsum = np.concatenate([np.zeros((d, 1)), W_sum], axis=1)
+    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K+1, axis=1) + M * padded_Wsum - np.full_like(padded_Wsum, l), 0, np.inf)
+    w_m = M / (1 + m * (M**2)) * threshold
 
     # Check for condition
-    m_tilde_condition = np.logical_and(w_m <= sorted_W, w_m >= np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)[:,1:])
+    upper_bound = np.concatenate([np.repeat(np.inf, d).reshape((-1, 1)), sorted_W], axis=1)
+    lower_bound = np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)
+    m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
 
-    # Find the first true value per row
-    m_tilde_first_only = np.zeros_like(m_tilde_condition, dtype=bool)
-    idx = np.arange(len(m_tilde_condition)), m_tilde_condition.argmax(axis=1)
-    m_tilde_first_only[idx] = m_tilde_condition[idx]
+    first_m_tilde = m_tilde_condition.cumsum(axis=1).cumsum(axis=1) == 1
+    m_tilde = w_m[first_m_tilde]
 
-    # Set the first value of each row to true if all other values in the row are false
-    set_first_true_array = np.full_like(m_tilde_first_only, False)
-    set_first_true_array[:,-1] = np.sum(m_tilde_first_only, axis=1) < 1
-    m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
-    m_tilde = w_m[m_tilde_first_only]
-
-    # Calculate output
     theta_out = (1/M) * np.sign(theta) * m_tilde
     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
 
@@ -213,7 +206,7 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
 
 
 def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto"):
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start)
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True)
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     res_k = np.zeros(len(history))
@@ -228,7 +221,7 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
     return (res_k, res_val, res_l)
 
 
-def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-2, starting_lambda=None):
+def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-3, starting_lambda=None):
     # dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError())
 
     if starting_lambda == None:
@@ -236,7 +229,7 @@ def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='rel
 
     res_k, res_theta, res_val, res_l = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=True,
+        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=False,
         patience=patiences[1], verbose=print_path, use_faster_eval=False)
 
     return (res_k, res_val, res_l)
@@ -323,15 +316,16 @@ for d_nlags in dlag_opt:
         tyv = tf.convert_to_tensor(yv)
 
         # Run for M variations
-        HP_opts = [1, 10, 20, 100, 200]
+        HP_opts = [100]
         HP_results = []
-        EXPERIMENT_NAME = "LN_M_PAPER"
+        EXPERIMENT_NAME = "LN_B"
 
-        USE_PAPER_LASSONET = True
+        USE_PAPER_LASSONET = False
         if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, k=Xt.shape[1], activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000)
+            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, ksize=Xt.shape[1], activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0)
             initial_model.save('temp_network.keras')
             initial_model_best_weights = initial_model.get_weights()
+            initial_model.save_weights('temp_weights.weights.h5')
 
         for hp in HP_opts:
             np.random.seed(1234)
@@ -341,12 +335,14 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask( 
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.01, M=hp, patiences=(100, 10), max_iters=(10000, 100), l_start=5)
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.01, M=20, patiences=(100, 10), max_iters=(1000, 100), l_start=5)
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
+                network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.001, momentum=0.9), loss=ks.losses.MeanSquaredError())
+                network.load_weights('temp_weights.weights.h5')
                 res_k, res_val, res_l = return_LassoNet_mask(
-                    network, Xt, Xv, yt, yv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 100), print_path=True, print_lambda=True, starting_lambda=None)
+                    initial_model, Xt, Xv, yt, yv, K=best_K, pm=0.01, M=20, patiences=(100, 10), max_iters=(1000, hp), print_path=True, print_lambda=True, starting_lambda=5)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             
@@ -360,14 +356,14 @@ for d_nlags in dlag_opt:
         # plt.legend(labels=[f"M={l}" for l in HP_opts])
         legd = fig.get_legend()
         for t, l in zip(legd.texts, HP_opts):
-            t.set_text(r"$M$" + f"={l}")
+            t.set_text(r"$B$" + f"={l}")
 
         sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
         plt.xlabel("selected features")
         plt.ylabel("mse")
-        plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.eps', format='eps', bbox_inches='tight')
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.eps', format='eps', bbox_inches='tight')
         # plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.png', format='png', bbox_inches='tight')
-        # plt.show()
+        plt.show()
 
         # Plot selected features against lambda
         fig = plt.figure(figsize=(6, 3))
@@ -377,14 +373,14 @@ for d_nlags in dlag_opt:
         # plt.legend(labels=[f"M={l}" for l in HP_opts])
         legd = fig.get_legend()
         for t, l in zip(legd.texts, HP_opts):
-            t.set_text(r"$M$" + f"={l}")
+            t.set_text(r"$B$" + f"={l}")
 
         sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
         plt.xlabel(r'$\lambda$')
         plt.ylabel("selected features")
-        plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.eps', format='eps', bbox_inches='tight')
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.eps', format='eps', bbox_inches='tight')
         # plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.png', format='png', bbox_inches='tight')
-        # plt.show()
+        plt.show()
 
         # Plot mse against lambda
         fig = plt.figure(figsize=(6, 3))
@@ -394,11 +390,11 @@ for d_nlags in dlag_opt:
         # plt.legend(labels=[f"M={l}" for l in HP_opts])
         legd = fig.get_legend()
         for t, l in zip(legd.texts, HP_opts):
-            t.set_text(r"$M$" + f"={l}")
+            t.set_text(r"$B$" + f"={l}")
 
         sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
         plt.xlabel(r'$\lambda$')
         plt.ylabel("mse")
-        plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.eps', format='eps', bbox_inches='tight')
+        # plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.eps', format='eps', bbox_inches='tight')
         # plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.png', format='png', bbox_inches='tight')
-        # plt.show()
+        plt.show()

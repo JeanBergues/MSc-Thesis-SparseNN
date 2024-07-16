@@ -15,23 +15,26 @@ ks.utils.set_random_seed(1234)
 pt.manual_seed(1234)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0, use_L1 = False):
     inp = ks.layers.Input(shape=(ksize,))
-    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    if use_L1:
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+    else:
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
+
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     if len(K) > 1:
         for k in K[1:]:
-            dp = ks.layers.Dropout(0.05)(gw)
+            dp = ks.layers.Dropout(drop)(gw)
             gw = ks.layers.Dense(units=k, activation=activation)(dp)   
 
-    merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=1)(merge)
+    last_node = ks.layers.Dense(units=1)(gw)
+    output = ks.layers.Add()([skip, last_node])
 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=0,
+        min_delta=0.01,
         patience=patience,
         verbose=0,
         mode="auto",
@@ -174,36 +177,29 @@ def train_lasso_path(network,
 
 
 def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
-    # Assert correct sizes
+    # Notation
     theta = theta.ravel()
     d = theta.shape[0]
     K = W.shape[1]
     assert W.shape[0] == d
 
-    # Order the weights
+    # sorted_W = np.flip(np.sort(np.abs(W)), axis=1)
     sorted_W = -np.sort(-np.abs(W))
-
-    # Calculate w_m's
     W_sum = np.cumsum(sorted_W, axis=1)
-    m = np.arange(start=1, stop=K+1)
-    threshold = np.clip((np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum) - np.full_like(W_sum, l), 0, np.inf)
-    w_m = (M * threshold) / (1 + m * (M**2)) 
+
+    m = np.arange(start=0, stop=K+1)
+    padded_Wsum = np.concatenate([np.zeros((d, 1)), W_sum], axis=1)
+    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K+1, axis=1) +  M * padded_Wsum - np.full_like(padded_Wsum, l), 0, np.inf)
+    w_m = M / (1 + m * (M**2)) * threshold
 
     # Check for condition
-    m_tilde_condition = np.logical_and(w_m <= sorted_W, w_m >= np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)[:,1:])
+    upper_bound = np.concatenate([np.repeat(np.inf, d).reshape((-1, 1)), sorted_W], axis=1)
+    lower_bound = np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)
+    m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
 
-    # Find the first true value per row
-    m_tilde_first_only = np.zeros_like(m_tilde_condition, dtype=bool)
-    idx = np.arange(len(m_tilde_condition)), m_tilde_condition.argmax(axis=1)
-    m_tilde_first_only[idx] = m_tilde_condition[idx]
+    first_m_tilde = m_tilde_condition.cumsum(axis=1).cumsum(axis=1) == 1
+    m_tilde = w_m[first_m_tilde]
 
-    # Set the first value of each row to true if all other values in the row are false
-    set_first_true_array = np.full_like(m_tilde_first_only, False)
-    set_first_true_array[:,-1] = np.sum(m_tilde_first_only, axis=1) < 1
-    m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
-    m_tilde = w_m[m_tilde_first_only]
-
-    # Calculate output
     theta_out = (1/M) * np.sign(theta) * m_tilde
     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
 
@@ -233,18 +229,18 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
         return frac_h
 
 
-def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-2, starting_lambda=None):
-    # dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError())
+def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, n_features=0):
+    dense = return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize=Xt.shape[1], activation='relu', K=K, verbose=1, patience=100, epochs=10000, drop=0)
 
     if starting_lambda == None:
-        starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=10)
+        starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=8)
 
     res_k, res_theta, res_val, res_l = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=True,
+        train_until_k=n_features, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=False,
         patience=patiences[1], verbose=print_path, use_faster_eval=False)
 
-    return (res_k, res_val, res_l)
+    return res_theta[-1]
 
 
 ###############################################################################################################################################################################################
@@ -277,7 +273,7 @@ def main():
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/LASSONET_2_14_SMALL"
+            EXPERIMENT_NAME = f"final_forecasts/TEST_1_1"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -325,11 +321,15 @@ def main():
             best_K = [200, 100, 50, 20]
 
             Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(10000, 5), n_features=14, l_start='auto') != 0)
+            # mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(10000, 5), n_features=14, l_start='auto') != 0)
+            mask = np.ravel(return_LassoNet_mask(Xt, Xv, yt, yv, K=tuple(best_K), print_path=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(1000, 10), n_features=14, starting_lambda=None) != 0)
             print(f"Selected {np.sum(mask)} features.")
             Xtm = Xtrain[:,mask]
             Xtt = Xtest[:,mask]
             np.save(f'{EXPERIMENT_NAME}_MASK', mask)
+
+            # Xtm = Xtrain
+            # Xtt = Xtest
 
             # Select final model based on small validation set
             Xt, Xv, yt, yv = ms.train_test_split(Xtm, ytrain, test_size=30, shuffle=False)
@@ -343,7 +343,7 @@ def main():
             n_tests = 10
             final_results = np.zeros(n_tests)
             for i in range(n_tests):
-                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50)
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0.05, use_L1=True)
                 test_f = nn.predict(Xtt).ravel()
                 test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
                 experiment_mse = mt.mean_squared_error(ytest, test_f)

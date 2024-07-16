@@ -9,10 +9,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from time import perf_counter_ns
+import lassonet as lsn
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, activation='relu', include_bias=True, neurons=[100], patience=100, epochs=1000, verbose=0, drop=0):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, kernel_regularizer=ks.regularizers.L1L2(), name='skip_layer')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, name='skip_layer')(inp)
     dp = ks.layers.Dropout(drop)(inp)
     gw = ks.layers.Dense(units=neurons[0], activation=activation, name='gw_layer')(dp)
 
@@ -20,8 +21,8 @@ def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, lo
         for K in neurons[1:]:
             gw = ks.layers.Dense(units=K, activation=activation)(gw)   
 
-    merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=output_size)(merge)
+    last_node = ks.layers.Dense(units=output_size)(gw)
+    output = ks.layers.Add()([skip, last_node])
 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
@@ -50,37 +51,66 @@ def split_data(X, y, test_frac=0.2, val_frac=0.1):
     return (X_trainv, X_val, X_test, y_trainv, y_val, y_test)
 
 
+# def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
+#     # Assert correct sizes
+#     theta = theta.ravel()
+#     d = theta.shape[0]
+#     K = W.shape[1]
+#     assert W.shape[0] == d
+
+#     # Order the weights
+#     sorted_W = -np.sort(-np.abs(W))
+
+#     # Calculate w_m's
+#     W_sum = np.cumsum(sorted_W, axis=1)
+#     m = np.arange(start=1, stop=K+1)
+#     threshold = np.clip((np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum) - np.full_like(W_sum, l), 0, np.inf)
+#     w_m = (M * threshold) / (1 + m * (M**2)) 
+
+#     # Check for condition
+#     m_tilde_condition = np.logical_and(w_m <= sorted_W, w_m >= np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)[:,1:])
+
+#     # Find the first true value per row
+#     m_tilde_first_only = np.zeros_like(m_tilde_condition, dtype=bool)
+#     idx = np.arange(len(m_tilde_condition)), m_tilde_condition.argmax(axis=1)
+#     m_tilde_first_only[idx] = m_tilde_condition[idx]
+
+#     # Set the first value of each row to true if all other values in the row are false
+#     set_first_true_array = np.full_like(m_tilde_first_only, False)
+#     set_first_true_array[:,0] = np.sum(m_tilde_first_only, axis=1) < 1
+#     m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
+#     m_tilde = w_m[m_tilde_first_only]
+
+#     # Calculate output
+#     theta_out = (1/M) * np.sign(theta) * m_tilde
+#     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
+
+#     return (theta_out, W_out)
+
 def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
-    # Assert correct sizes
+    # Notation
     theta = theta.ravel()
     d = theta.shape[0]
     K = W.shape[1]
     assert W.shape[0] == d
 
-    # Order the weights
+    # sorted_W = np.flip(np.sort(np.abs(W)), axis=1)
     sorted_W = -np.sort(-np.abs(W))
-
-    # Calculate w_m's
     W_sum = np.cumsum(sorted_W, axis=1)
-    m = np.arange(start=1, stop=K+1)
-    threshold = np.clip((np.repeat(np.abs(theta).reshape((-1, 1)), K, axis=1) + M * W_sum) - np.full_like(W_sum, l), 0, np.inf)
-    w_m = (M * threshold) / (1 + m * (M**2)) 
+
+    m = np.arange(start=0, stop=K+1)
+    padded_Wsum = np.concatenate([np.zeros((d, 1)), W_sum], axis=1)
+    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K+1, axis=1) +  M * padded_Wsum - np.full_like(padded_Wsum, l), 0, np.inf)
+    w_m = M / (1 + m * (M**2)) * threshold
 
     # Check for condition
-    m_tilde_condition = np.logical_and(w_m <= sorted_W, w_m >= np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)[:,1:])
+    upper_bound = np.concatenate([np.repeat(np.inf, d).reshape((-1, 1)), sorted_W], axis=1)
+    lower_bound = np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)
+    m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
 
-    # Find the first true value per row
-    m_tilde_first_only = np.zeros_like(m_tilde_condition, dtype=bool)
-    idx = np.arange(len(m_tilde_condition)), m_tilde_condition.argmax(axis=1)
-    m_tilde_first_only[idx] = m_tilde_condition[idx]
+    first_m_tilde = m_tilde_condition.cumsum(axis=1).cumsum(axis=1) == 1
+    m_tilde = w_m[first_m_tilde]
 
-    # Set the first value of each row to true if all other values in the row are false
-    set_first_true_array = np.full_like(m_tilde_first_only, False)
-    set_first_true_array[:,0] = np.sum(m_tilde_first_only, axis=1) < 1
-    m_tilde_first_only = np.logical_or(m_tilde_first_only, set_first_true_array)
-    m_tilde = w_m[m_tilde_first_only]
-
-    # Calculate output
     theta_out = (1/M) * np.sign(theta) * m_tilde
     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
 
@@ -240,17 +270,30 @@ def train_lasso_path(network,
         res_val.append(val_acc)
 
         forecast = network.predict(X_val)
-        val_r, _ = calc_investment_returns(forecast, y_val, trad_cost=0)
-        res_r.append(val_r[0])
         
-        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.1f}, MSE = {val_acc:.6f}, r = {val_r[0]:.3f} \n\n")
+        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.1f}, MSE = {val_acc:.6f} \n\n")
 
         if k <  X_train.shape[1]/2 and val_acc < 0.5 * prev_obj and early_val_stop: 
             break
         else:
             prev_obj = val_acc  
     
-    return (res_k, res_theta, res_val, res_isa, res_r)
+    return (res_k, res_theta, res_val, res_isa)
+
+def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.2, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto"):
+    lassoC = lsn.LassoNetClassifier(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start)
+    history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
+
+    res_k = np.zeros(len(history))
+    res_val = np.zeros(len(history))
+    res_l = np.zeros(len(history))
+
+    for i, h in enumerate(history):
+        res_k[i] = h.selected.sum()
+        res_val[i] = h.val_loss
+        res_l[i] = h.lambda_
+
+    return (res_k, res_val, res_val, res_val)
 
 def main() -> None:
     USE_BTC_DATA = False
@@ -278,18 +321,20 @@ def main() -> None:
 
     # Dense network parameters
     bias            = False
-    layer_size      = [10, 5] # int((3/3) * X_train.shape[1])
+    layer_size      = [100] # int((3/3) * X_train.shape[1])
     max_epochs      = 1000
     dense_patience  = 100
     dense_opt       = ks.optimizers.Adam()
     loss            = ks.losses.SparseCategoricalCrossentropy(from_logits=True)
     metrics         = ['accuracy']
 
+
+
     # Sparse algorithm parameters
-    estimate_lambda         = True
+    estimate_lambda         = False
     fast_fit                = True
     fast_eval               = False
-    use_best_weights        = False
+    use_best_weights        = True
     print_lambda_estimation = True
     print_sparsification    = True
     plot_lambda_path        = True
@@ -305,19 +350,21 @@ def main() -> None:
     sparse_opt = ks.optimizers.SGD(learning_rate=a, momentum=0.9)
 
     # Train the dense model
-    nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, dense_opt, loss, metrics, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+    # nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, dense_opt, loss, metrics, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
     if calculate_out_of_sample_accuracy: fm_result = nn.evaluate(X_test, y_test)
 
     # Recompile model for regularization path
-    nn.compile(optimizer=sparse_opt, loss=loss, metrics=metrics)
+    # nn.compile(optimizer=sparse_opt, loss=loss, metrics=metrics)
 
     # Estime the starting value for lambda (if enabled)
     if estimate_lambda: starting_lambda = estimate_starting_lambda(nn.get_layer('skip_layer').get_weights()[0], nn.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda_estimation)
 
     # Train the LassoNet over the lambda path
-    res_k, res_theta, res_val, res_isa = train_lasso_path(nn, starting_lambda, X_train, X_val, y_train, y_val, sparse_opt, loss, 
-                                                          train_until_k=n_features, use_faster_fit=fast_fit, lr=a, M=M, pm=e, max_epochs_per_lambda=B, use_best_weights=use_best_weights,
-                                                          patience=sparse_patience, verbose=print_sparsification, return_train=plot_lambda_path, use_faster_eval=fast_eval)
+    # res_k, res_theta, res_val, res_isa = train_lasso_path(nn, starting_lambda, X_train, X_val, y_train, y_val, sparse_opt, loss, 
+    #                                                       train_until_k=n_features, use_faster_fit=fast_fit, lr=a, M=M, pm=e, max_epochs_per_lambda=B, use_best_weights=use_best_weights,
+    #                                                       patience=sparse_patience, verbose=print_sparsification, return_train=plot_lambda_path, use_faster_eval=fast_eval)
+    
+    res_k, res_theta, res_val, res_isa = paper_lassonet_mask(X_train, X_val, y_train, y_val, K=(100,), verbose=2, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start=6.5)
 
     # Plot accuracies at all points of the lasso path
     if plot_lambda_path:
