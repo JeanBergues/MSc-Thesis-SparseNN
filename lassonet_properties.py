@@ -10,6 +10,7 @@ import sklearn.model_selection as ms
 import sklearn.metrics as mt
 import lassonet as lsn
 import torch as pt
+from functools import partial
 
 np.random.seed(1234)
 tf.random.set_seed(1234)
@@ -17,7 +18,7 @@ ks.utils.set_random_seed(1234)
 pt.manual_seed(1234)
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0):
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', lr=1e-1, epochs=500, patience=30, verbose=0, drop=0):
     inp = ks.layers.Input(shape=(ksize,))
     skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
@@ -44,13 +45,13 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
 
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
-    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+    nn.compile(optimizer=ks.optimizers.Adam(lr), loss=ks.losses.MeanSquaredError())
     nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
 
     return nn
 
 
-def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, tol = 1e-6, max_iter_per_lambda = 100000, verbose=False, divide_result = 8):
+def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-5, factor = 2, tol = 1e-6, max_iter_per_lambda = 10000, verbose=False, divide_result = 8):
     initial_theta = theta
     dense_W = W
     dense_theta = initial_theta
@@ -58,13 +59,15 @@ def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-3, factor = 2, to
 
     while not np.sum(np.abs(dense_theta)) == 0:
         dense_theta = initial_theta
+        dense_W = W
         l_test = l_test * factor
         if verbose: print(f"Testing lambda={l_test}")
 
         for _ in range(max_iter_per_lambda):
-            theta_new, _ = hier_prox(dense_theta, dense_W, l_test, M)
+            theta_new, W_new = hier_prox(dense_theta, dense_W, l_test, M)
             if np.max(np.abs(dense_theta - theta_new)) < tol: break # Check if the theta is still changing
             dense_theta = theta_new
+            dense_W = W_new
 
     return l_test / divide_result
 
@@ -121,6 +124,8 @@ def train_lasso_path(network,
             # Update using HIER-PROX
             start_prox = perf_counter_ns()
             theta_new, W_new = hier_prox(network.get_layer('skip_layer').get_weights()[0], network.get_layer('gw_layer').get_weights()[0], lr*l, M)
+            # print(theta_new)
+            # print(lsn.prox(pt.from_numpy(network.get_layer('skip_layer').get_weights()[0]).T, pt.from_numpy(network.get_layer('gw_layer').get_weights()[0]).T, lambda_=lr*l, lambda_bar=0, M=M)[0])
 
             new_skip_layer = network.get_layer('skip_layer').get_weights()
             new_skip_layer[0] = theta_new.reshape((-1, 1))
@@ -170,7 +175,7 @@ def train_lasso_path(network,
         val_acc = network.evaluate(X_val, y_val)
         res_val.append(val_acc)
         
-        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.1f}, MSE = {val_acc:.6f} \n\n")
+        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, MSE = {val_acc:.6f} \n\n")
     
     return (res_k, res_theta, res_val, res_l)
 
@@ -206,7 +211,9 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
 
 
 def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto"):
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True)
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M,
+                                patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True,
+                                optim=(partial(pt.optim.Adam, lr=0.01), partial(pt.optim.SGD, lr=0.01, momentum=0.3)))
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     res_k = np.zeros(len(history))
@@ -225,11 +232,11 @@ def return_LassoNet_mask(dense, Xt, Xv, yt, yv, K=[10], pm=0.02, activation='rel
     # dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.MeanSquaredError())
 
     if starting_lambda == None:
-        starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=10)
+        starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, divide_result=8) / a
 
     res_k, res_theta, res_val, res_l = train_lasso_path(
-        dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=False,
+        dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.3), ks.losses.MeanSquaredError(), 
+        train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=True,
         patience=patiences[1], verbose=print_path, use_faster_eval=False)
 
     return (res_k, res_val, res_l)
@@ -259,8 +266,8 @@ vol_h_returns =   hour_df.volume.to_numpy()
 volNot_h_returns =hour_df.volumeNotional.to_numpy()
 trades_h_returns =hour_df.tradesDone.to_numpy()
 
-dlag_opt = [1]
-use_hlag = [5]
+dlag_opt = [2]
+use_hlag = [2]
 
 for d_nlags in dlag_opt:
     for h_nlags in use_hlag:
@@ -306,7 +313,7 @@ for d_nlags in dlag_opt:
         n_repeats = 1
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
-        best_K = [200, 100, 50, 20]
+        best_K = [50]
         # best_K = [200, 100]
 
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
@@ -322,7 +329,7 @@ for d_nlags in dlag_opt:
 
         USE_PAPER_LASSONET = False
         if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, ksize=Xt.shape[1], activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0)
+            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, ksize=Xt.shape[1], activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
             initial_model.save('temp_network.keras')
             initial_model_best_weights = initial_model.get_weights()
             initial_model.save_weights('temp_weights.weights.h5')
@@ -335,14 +342,14 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask( 
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.01, M=20, patiences=(100, 10), max_iters=(1000, 100), l_start=5)
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.005, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto')
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
-                network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.001, momentum=0.9), loss=ks.losses.MeanSquaredError())
+                network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.3), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
                 res_k, res_val, res_l = return_LassoNet_mask(
-                    initial_model, Xt, Xv, yt, yv, K=best_K, pm=0.01, M=20, patiences=(100, 10), max_iters=(1000, hp), print_path=True, print_lambda=True, starting_lambda=5)
+                    initial_model, Xt, Xv, yt, yv, K=best_K, pm=0.02, M=20, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.1)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             

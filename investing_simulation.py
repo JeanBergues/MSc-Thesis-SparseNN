@@ -59,12 +59,10 @@ ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
 print("Data has been fully loaded")
 
 best_model_np = [
-    'final_forecasts/SKIPDP_1_0_FORECAST',
-    'final_forecasts/SKIPDP_1_1_FORECAST',
-    'final_forecasts/SKIPDP_1_2_FORECAST',
-    'final_forecasts/SKIPDP_1_3_FORECAST',
-    'final_forecasts/SKIPS_2_0_FORECAST',
-    'final_forecasts/TEST_1_1_FORECAST',
+    'final_forecasts/MAE_NN_1_1_FORECAST',
+    'final_forecasts/SLNN_2_0_FORECAST',
+    'final_forecasts/NN_2_0_FORECAST',
+    'final_forecasts/LR1_NN_1_1_FORECAST',
     'final_forecasts/LNA_2_14_1LAG_FORECAST',
 ]
 
@@ -108,7 +106,7 @@ print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean
 #     print(k)
 #     print(dm.dm_test(ytest, benchmark, v))
 
-leg = ['DNN(1,0)', 'DNN(1,1)', 'DNN(1,2)', 'DNN(1,3)', 'DNN(1,4)', 'DNN(1,5)', 'LASSO(2)', 'Long', 'Short']
+leg = ['1', '2', '3', '4', '5', 'Long', 'Short']
 
 x_axis = list(range(len(ytest.ravel())))
 fig = plt.figure(figsize=(16, 6))

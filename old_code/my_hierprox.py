@@ -1,6 +1,8 @@
 import numpy as np
 # import numba as nb
 import time as tm
+import torch as pt
+import lassonet as lsn
 
 # @nb.njit()
 def soft_threshold(x: float, labda: float) -> float:
@@ -89,7 +91,7 @@ def vec_hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple
 
     m = np.arange(start=0, stop=K+1)
     padded_Wsum = np.concatenate([np.zeros((d, 1)), W_sum], axis=1)
-    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K+1, axis=1) -  M * padded_Wsum - np.full_like(padded_Wsum, l), 0, np.inf)
+    threshold = np.clip(np.repeat(np.abs(theta).reshape((-1, 1)), K+1, axis=1) + M * padded_Wsum - np.full_like(padded_Wsum, l), 0, np.inf)
     w_m = M / (1 + m * (M**2)) * threshold
 
     # Check for condition
@@ -103,7 +105,6 @@ def vec_hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple
     theta_out = (1/M) * np.sign(theta) * m_tilde
     W_out = np.sign(W) * np.minimum(np.abs(W), np.repeat(m_tilde.reshape((-1, 1)), K, axis=1))
 
-    print(theta_out)
     return (theta_out, W_out)
 
 def old_hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
@@ -149,6 +150,7 @@ if __name__ == '__main__':
     d_test = 5
     K_test = 10
 
+    test_theta = np.array([1, .1, .2, .4, 2]).reshape((-1, 1))/100000
     test_U = np.random.standard_normal((d_test, K_test))
 
     # start = tm.perf_counter()
@@ -157,21 +159,23 @@ if __name__ == '__main__':
     # end = tm.perf_counter()
     # print(f"First run took {end - start:.6f} ns.")
 
-    start = tm.perf_counter()
-    x = alt_hier_prox(np.array([1, .1, .2, .4, 2]).reshape((-1, 1)), test_U, 11, 10)
+    # start = tm.perf_counter()
+    # x = alt_hier_prox(np.array([1, .1, .2, .4, 2]).reshape((-1, 1)), test_U, 11, 10)
+    # # print(x[0])
+    # end = tm.perf_counter()
+    # print(f"First run took {end - start:.6f} ns.")
+
+    start = tm.perf_counter_ns()
+    x = vec_hier_prox(test_theta, test_U, 0.002, 10)
+    end = tm.perf_counter_ns()
+    print(x[0])
+    print(f"First run took {end - start} ns.")
+
+    # start = tm.perf_counter_ns()
+    # x = old_hier_prox(np.array([1, .1, .2, .4, 2]).reshape((-1, 1)), test_U, 11, 10)
     # print(x[0])
-    end = tm.perf_counter()
-    print(f"First run took {end - start:.6f} ns.")
-
-    start = tm.perf_counter_ns()
-    x = vec_hier_prox(np.array([1, .1, .2, .4, 2]).reshape((-1, 1)), test_U, 11, 10)
-    end = tm.perf_counter_ns()
-    print(f"First run took {end - start} ns.")
-
-    start = tm.perf_counter_ns()
-    x = old_hier_prox(np.array([1, .1, .2, .4, 2]).reshape((-1, 1)), test_U, 11, 10)
-    end = tm.perf_counter_ns()
-    print(f"First run took {end - start} ns.")
+    # end = tm.perf_counter_ns()
+    # print(f"First run took {end - start} ns.")
 
     # start = tm.perf_counter()
     # x = vec_hier_prox(np.ones(d_test).reshape((-1, 1)), test_U, 0.05, 10)
@@ -182,4 +186,4 @@ if __name__ == '__main__':
     # x = vec_hier_prox(np.ones(d_test).reshape((-1, 1)), test_U, 0.05, 10)
     # end = tm.perf_counter()
     # print(f"First run took {end - start:.6f} ns.")
-    print(np.linalg.norm(np.array([1, -2, 3, -4, 5]).reshape((-1, 1)), ord=2))
+    print(lsn.prox(pt.from_numpy(test_theta).T, pt.from_numpy(test_U).T, lambda_=0.002, lambda_bar=0, M=10)[0])
