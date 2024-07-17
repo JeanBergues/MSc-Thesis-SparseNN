@@ -63,7 +63,7 @@ best_model_np = [
     'final_forecasts/SLNN_2_0_FORECAST',
     'final_forecasts/NN_2_0_FORECAST',
     'final_forecasts/LR1_NN_1_1_FORECAST',
-    'final_forecasts/LNA_2_14_1LAG_FORECAST',
+    'final_forecasts/PLN_1_2_FORECAST',
 ]
 
 best_model_txt = [

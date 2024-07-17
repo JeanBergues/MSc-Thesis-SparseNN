@@ -11,43 +11,47 @@ tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
 
-def return_MLP_merge_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
-    inp = ks.layers.Input(shape=(ksize,))
-    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
-    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
-    if len(K) > 1:
-        for k in K[1:]:
-            dp = ks.layers.Dropout(0.05)(gw)
-            gw = ks.layers.Dense(units=k, activation=activation)(dp)   
+# def return_MLP_merge_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0):
+#     inp = ks.layers.Input(shape=(ksize,))
+#     # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
+#     skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+#     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
+#     if len(K) > 1:
+#         for k in K[1:]:
+#             dp = ks.layers.Dropout(0.05)(gw)
+#             gw = ks.layers.Dense(units=k, activation=activation)(dp)   
 
-    merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=1)(merge)
+#     merge = ks.layers.Concatenate()([skip, gw])
+#     output = ks.layers.Dense(units=1)(merge)
 
-    # Implement early stopping
-    early_stop = ks.callbacks.EarlyStopping(
-        monitor="val_loss",
-        min_delta=0,
-        patience=patience,
-        verbose=0,
-        mode="auto",
-        baseline=None,
-        restore_best_weights=True,
-        start_from_epoch=0,
-    )
+#     # Implement early stopping
+#     early_stop = ks.callbacks.EarlyStopping(
+#         monitor="val_loss",
+#         min_delta=0,
+#         patience=patience,
+#         verbose=0,
+#         mode="auto",
+#         baseline=None,
+#         restore_best_weights=True,
+#         start_from_epoch=0,
+#     )
 
-    # Initial dense training
-    nn = ks.models.Model(inputs=inp, outputs=output)
-    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
-    nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
+#     # Initial dense training
+#     nn = ks.models.Model(inputs=inp, outputs=output)
+#     nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+#     nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
 
-    return nn
+#     return nn
 
-def return_MLP_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epochs=500, patience=30, verbose=0, drop=0):
-    inp = ks.layers.Input(shape=(ksize,))
-    # skip = ks.layers.Dense(units=1, activation='linear', use_bias=True, name='skip_layer')(inp)
-    gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
+def return_MLP_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs=20_000, patience=100, verbose=0, drop=0, use_L1=False, es_tol=0):
+    inp = ks.layers.Input(shape=(Xt.shape[1],))
+
+    if use_L1:
+        gw = ks.layers.Dense(units=K[0], activation=activation, kernel_regularizer=ks.regularizers.L1(), name='gw_layer')(inp)
+    else:
+        gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)
     gw = ks.layers.Dropout(drop)(gw)
+
     if len(K) > 1:
         for k in K[1:]:
             gw = ks.layers.Dense(units=k, activation=activation)(gw)   
@@ -57,7 +61,7 @@ def return_MLP_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', epoch
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=0,
+        min_delta=es_tol,
         patience=patience,
         verbose=0,
         mode="auto",

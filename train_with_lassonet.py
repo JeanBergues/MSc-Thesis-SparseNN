@@ -8,6 +8,8 @@ import sklearn.metrics as mt
 import lassonet as lsn
 import torch as pt
 from time import perf_counter_ns
+import torch as pt
+from functools import partial
 
 np.random.seed(1234)
 tf.random.set_seed(1234)
@@ -34,7 +36,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=0.01,
+        min_delta=0,
         patience=patience,
         verbose=0,
         mode="auto",
@@ -45,7 +47,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
 
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
-    nn.compile(optimizer=ks.optimizers.Adam(1e-3), loss=ks.losses.MeanSquaredError())
+    nn.compile(optimizer=ks.optimizers.Adam(1e-1), loss=ks.losses.MeanSquaredError())
     nn.fit(Xt, yt, validation_data=(Xv, yv), epochs=epochs, callbacks=[early_stop], verbose=verbose)
 
     return nn
@@ -207,7 +209,9 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
 
 
 def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto", n_features=0):
-    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M, patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start)
+    lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M,
+                                patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True,
+                                optim=(partial(pt.optim.Adam, lr=0.01), partial(pt.optim.SGD, lr=0.01, momentum=0.3)))
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
     lowest_obj = np.inf
 
@@ -215,7 +219,7 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
         if h.val_loss < lowest_obj:
             lowest_obj = h.val_loss
             obj_h = h.selected.data.numpy()
-        if h.selected.sum() <= n_features:
+        if h.selected.sum() <= n_features and n_features > 0:
             frac_h = h.selected.data.numpy() if h.selected.sum() > 0 else backup_h
             return h.selected.data.numpy()
         else:
@@ -237,7 +241,7 @@ def return_LassoNet_mask(Xt, Xv, yt, yv, K=[10], pm=0.02, activation='relu', M=1
 
     res_k, res_theta, res_val, res_l = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.MeanSquaredError(), 
-        train_until_k=n_features, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=False,
+        train_until_k=n_features, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=True,
         patience=patiences[1], verbose=print_path, use_faster_eval=False)
 
     return res_theta[-1]
@@ -269,11 +273,11 @@ def main():
     trades_h_returns =hour_df.tradesDone.to_numpy()
 
     dlag_opt = [1]
-    use_hlag = [5]
+    use_hlag = [2]
 
     for d_nlags in dlag_opt:
         for h_nlags in use_hlag:
-            EXPERIMENT_NAME = f"final_forecasts/TEST_1_1"
+            EXPERIMENT_NAME = f"final_forecasts/PLN_1_2"
 
             bound_lag = max(d_nlags, ((h_nlags-1)//freq + 1))
             y_raw = close_returns[bound_lag:].reshape(-1, 1)
@@ -318,11 +322,11 @@ def main():
 
             n_repeats = 1
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
-            best_K = [200, 100, 50, 20]
+            best_K = [25]
 
             Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-            # mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(10000, 5), n_features=14, l_start='auto') != 0)
-            mask = np.ravel(return_LassoNet_mask(Xt, Xv, yt, yv, K=tuple(best_K), print_path=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(1000, 10), n_features=14, starting_lambda=None) != 0)
+            mask = np.ravel(paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.001, M=10, patiences=(100, 10), max_iters=(10000, 200), n_features=0, l_start='auto') != 0)
+            # mask = np.ravel(return_LassoNet_mask(Xt, Xv, yt, yv, K=tuple(best_K), print_path=2, pm=0.002, M=20, patiences=(100, 5), max_iters=(1000, 10), n_features=0, starting_lambda=None) != 0)
             print(f"Selected {np.sum(mask)} features.")
             Xtm = Xtrain[:,mask]
             Xtt = Xtest[:,mask]
@@ -343,7 +347,7 @@ def main():
             n_tests = 10
             final_results = np.zeros(n_tests)
             for i in range(n_tests):
-                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=50, drop=0.05, use_L1=True)
+                nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, Xt.shape[1], verbose=0, K=best_K, activation='tanh', epochs=20_000, patience=100, drop=0, use_L1=True)
                 test_f = nn.predict(Xtt).ravel()
                 test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
                 experiment_mse = mt.mean_squared_error(ytest, test_f)

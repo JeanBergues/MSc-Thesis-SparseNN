@@ -34,7 +34,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, ksize, K=[10], activation='relu', 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
         monitor="val_loss",
-        min_delta=0.01,
+        min_delta=0,
         patience=patience,
         verbose=0,
         mode="auto",
@@ -327,7 +327,7 @@ for d_nlags in dlag_opt:
         HP_results = []
         EXPERIMENT_NAME = "LN_B"
 
-        USE_PAPER_LASSONET = False
+        USE_PAPER_LASSONET = True
         if not USE_PAPER_LASSONET:
             initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, ksize=Xt.shape[1], activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
             initial_model.save('temp_network.keras')
@@ -342,7 +342,7 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, res_val, res_l = paper_lassonet_mask( 
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.005, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto')
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.001, M=50, patiences=(100, 10), max_iters=(10000, 100), l_start='auto')
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
