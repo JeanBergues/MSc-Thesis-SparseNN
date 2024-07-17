@@ -28,10 +28,10 @@ def main() -> None:
 
     # Starting model, optimized with Adam
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer='l1_l2')(inp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False)(inp)
     gw = ks.layers.Dense(units=100, activation='relu')(inp)
-    merge = ks.layers.Concatenate()([skip, gw])
-    output = ks.layers.Dense(units=8)(merge)
+    # merge = ks.layers.Concatenate()([skip, gw])
+    output = ks.layers.Dense(units=8)(gw)
 
     # Implement early stopping
     early_stop = ks.callbacks.EarlyStopping(
@@ -48,7 +48,7 @@ def main() -> None:
     # Initial dense training
     nn = ks.models.Model(inputs=inp, outputs=output)
     nn.compile(optimizer=ks.optimizers.Adam(), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
-    nn.fit(X_trainv, y_trainv, validation_data=(X_val, y_val), epochs=100, callbacks=[early_stop])
+    nn.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=100, callbacks=[early_stop])
 
     # Recompile to SGD solver for regularization path
     nn.compile(optimizer=ks.optimizers.SGD(learning_rate=1e-3, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
