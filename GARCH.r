@@ -75,7 +75,7 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   
   if (summ) {print(model)}
   
-  forc_results <- ugarchforecast(model, n.ahead=length(yv))
+  forc_results <- ugarchforecast(model, n.ahead=1, n.roll=length(yv)-1)
   forc <- as.numeric(fitted(forc_results))
   
   mse <- (1/length(yv)) * sum((yv - forc)^2)
@@ -109,7 +109,8 @@ for (p in try_p) {
 
 
 # Compare against predicting mean
-fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
+#fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
+fm <- estimate_garch_model(rdf, rts, 1, 0, 1, 1, 0, summ=TRUE)
 
 print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
