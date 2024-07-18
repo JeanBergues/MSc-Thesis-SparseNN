@@ -16,8 +16,8 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1, 2, 3]
-    hlag_opt = [0, 3, 6, 12, 24]
+    dlag_opt = [1, 2]
+    hlag_opt = [0, 1, 3, 6, 12, 24]
 
     # dlag_opt = [7]
     # hlag_opt = [24]
@@ -26,9 +26,10 @@ def main():
         [5],
         [10],
         [20],
-        [30],
         [50],
-        [100]
+        [100],
+        [150],
+        [200]
     ]
     
     USE_X = False
@@ -46,7 +47,7 @@ def main():
     dropout         = 0
     use_l1_penalty  = False
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/"
+    BASE_EXPERIMENT_NAME = "final_forecasts/B"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
 
@@ -55,7 +56,6 @@ def main():
     # Begin the training
     for d_nlags in dlag_opt:
         for h_nlags in hlag_opt:
-            if (d_nlags, h_nlags) in [(1, 0), (1, 3)]: continue
             np.random.seed(1234)
             tf.random.set_seed(1234)
             ks.utils.set_random_seed(1234)
@@ -80,6 +80,7 @@ def main():
             # Select layer size using validation set
             if VALIDATE_LAYER:
                 Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+                Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
                 yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
                 for K in K_opt:
@@ -90,9 +91,9 @@ def main():
                     mses = np.zeros(n_cv_reps)
                     for i in range(len(mses)):
                         if USE_SKIP:
-                            predictor = return_MLP_estimator(Xt, Xv, yt, yv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
+                            predictor = return_MLP_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                         else:
-                            predictor = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
+                            predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                         ypred = predictor.predict(Xv).ravel()
                         ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
                         mse = mt.mean_squared_error(yval, ypred)
