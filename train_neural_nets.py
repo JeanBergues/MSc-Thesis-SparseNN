@@ -46,19 +46,21 @@ def main():
     dropout         = 0
     use_l1_penalty  = False
 
-    EXPERIMENT_NAME = "final_forecasts/"
-    EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
-    EXPERIMENT_NAME += "X_" if USE_X else ""
+    BASE_EXPERIMENT_NAME = "final_forecasts/"
+    BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
+    BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
 
     PLOT_FINAL_FORECASTS = False
 
     # Begin the training
     for d_nlags in dlag_opt:
         for h_nlags in hlag_opt:
+            if (d_nlags, h_nlags) in [(1, 0), (1, 3)]: continue
             np.random.seed(1234)
             tf.random.set_seed(1234)
             ks.utils.set_random_seed(1234)
-            EXPERIMENT_NAME += f"{d_nlags}_{h_nlags}"
+            EXPERIMENT_NAME = BASE_EXPERIMENT_NAME + f"{d_nlags}_{h_nlags}"
+            print(f"STARTING {EXPERIMENT_NAME}")
 
             if USE_X:
                 X_raw, y_raw = load_data_with_X(day_df, hour_df, d_nlags, h_nlags)
