@@ -18,7 +18,7 @@ def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val
     mean_f = 0
 
     if use_thresholds:
-        last_seen = list(ytrain.ravel()[-14:])
+        last_seen = [0] * 7
 
     for t, (f, r) in enumerate(zip(forecast, real)):
         pos = prev_pos

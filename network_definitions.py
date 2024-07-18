@@ -24,7 +24,7 @@ def return_MLP_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs=20_0
         mode="auto",
         baseline=None,
         restore_best_weights=True,
-        start_from_epoch=0,
+        # start_from_epoch=0,
     )
 
     # Initial dense training
@@ -63,7 +63,7 @@ def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs
         mode="auto",
         baseline=None,
         restore_best_weights=True,
-        start_from_epoch=0,
+        # start_from_epoch=0,
     )
 
     # Initial dense training
@@ -100,7 +100,7 @@ def return_MLP_skip_classifier(Xt, Xv, yt, yv, classes, K=[100], activation='rel
         mode="auto",
         baseline=None,
         restore_best_weights=True,
-        start_from_epoch=0,
+        # start_from_epoch=0,
     )
 
     # Initial dense training

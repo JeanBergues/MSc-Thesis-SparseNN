@@ -30,15 +30,15 @@ def main():
         [50]
     ]
     
-    USE_X = True
+    USE_X = False
     USE_SKIP = True
     VALIDATE_LAYER = False
-    DEFAULT_K = [200, 100, 50, 20, 10]
+    DEFAULT_K = [100]
 
     activation      = 'tanh'
     n_cv_reps       = 5
     cv_patience     = 100
-    n_fm_reps       = 5
+    n_fm_reps       = 1
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
