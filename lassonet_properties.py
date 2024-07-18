@@ -48,30 +48,13 @@ hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
 freq = 24
 
-# raw_returns = day_df.close.pct_change(1)[1:].to_numpy()
-open_returns =  day_df.open.to_numpy()
-high_returns =  day_df.high.to_numpy()
-low_returns =   day_df.low.to_numpy()
-close_returns = day_df.close.to_numpy()
-vol_returns =   day_df.volume.to_numpy()
-volNot_returns =day_df.volumeNotional.to_numpy()
-trades_returns =day_df.tradesDone.to_numpy()
-
-open_h_returns =  hour_df.open.to_numpy()
-high_h_returns =  hour_df.high.to_numpy()
-low_h_returns =   hour_df.low.to_numpy()
-close_h_returns = hour_df.close.to_numpy()
-vol_h_returns =   hour_df.volume.to_numpy()
-volNot_h_returns =hour_df.volumeNotional.to_numpy()
-trades_h_returns =hour_df.tradesDone.to_numpy()
-
 dlag_opt = [7]
 use_hlag = [24]
 
-best_K = [200, 100, 50]
+best_K = [20, 5]
 
 USE_X = False
-USE_PAPER_LASSONET = True
+USE_PAPER_LASSONET = False
 SHOW = True
 
 for d_nlags in dlag_opt:
@@ -95,10 +78,6 @@ for d_nlags in dlag_opt:
         # best_K = [200, 100]
 
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
-        tXt = tf.convert_to_tensor(Xt)
-        tXv = tf.convert_to_tensor(Xv)
-        tyt = tf.convert_to_tensor(yt)
-        tyv = tf.convert_to_tensor(yv)
 
         # Run for M variations
         HP_opts = [100]
@@ -107,7 +86,7 @@ for d_nlags in dlag_opt:
 
         
         if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(tXt, tXv, tyt, tyv, ksize=Xt.shape[1], activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
+            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
             initial_model.save('temp_network.keras')
             initial_model_best_weights = initial_model.get_weights()
             initial_model.save_weights('temp_weights.weights.h5')
@@ -124,10 +103,10 @@ for d_nlags in dlag_opt:
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
-                network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.3), loss=ks.losses.MeanSquaredError())
+                network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
                 res_k, _, res_val, res_l = return_LassoNet_results(
-                    initial_model, Xt, Xv, yt, yv, K=best_K, pm=0.02, M=20, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.1)
+                    initial_model, Xt, Xv, yt, yv, pm=0.02, M=20, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.01)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             

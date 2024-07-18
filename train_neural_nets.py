@@ -16,29 +16,30 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1, 2]
-    hlag_opt = [0, 1, 2, 3]
+    dlag_opt = [1, 2, 3]
+    hlag_opt = [0, 3, 6, 12, 24]
 
-    dlag_opt = [1]
-    hlag_opt = [1]
+    # dlag_opt = [7]
+    # hlag_opt = [24]
 
     K_opt = [
         [5],
         [10],
         [20],
         [30],
-        [50]
+        [50],
+        [100]
     ]
     
     USE_X = False
     USE_SKIP = True
-    VALIDATE_LAYER = False
-    DEFAULT_K = [100]
+    VALIDATE_LAYER = True
+    DEFAULT_K = []
 
     activation      = 'tanh'
     n_cv_reps       = 5
     cv_patience     = 100
-    n_fm_reps       = 1
+    n_fm_reps       = 10
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
@@ -49,7 +50,7 @@ def main():
     EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
-    PLOT_FINAL_FORECASTS = True
+    PLOT_FINAL_FORECASTS = False
 
     # Begin the training
     for d_nlags in dlag_opt:

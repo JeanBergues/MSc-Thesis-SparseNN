@@ -110,7 +110,7 @@ def main():
 
     paths_to_plot = {}
     series_to_test = {}
-    WITH_STRATEGY = True
+    WITH_STRATEGY = False
 
     for m in best_model_np:
         fc = np.load(f'{m}.npy')[-365:]

@@ -42,8 +42,11 @@ def train_lasso_path(network,
                      pm=2e-2, 
                      max_epochs_per_lambda = 100, 
                      patience = 10, 
-                     verbose=False):
+                     verbose=False,
+                     regressor=True,
+                     save_best_network=False):
     
+    minimized = False
     res_k = []
     res_theta = []
     res_val = []
@@ -96,7 +99,7 @@ def train_lasso_path(network,
                 val_logits = network(X_val, training=False)
                 val_obj = loss_func(y_val, val_logits)
             else:
-                val_obj = network.evaluate(X_val, y_val, verbose='0')[0]
+                val_obj = network.evaluate(X_val, y_val, verbose='0') if regressor else network.evaluate(X_val, y_val, verbose='0')[0]
 
             train_time += perf_counter_ns() - start_train
 
@@ -124,12 +127,19 @@ def train_lasso_path(network,
         res_k.append(k)
         res_theta.append(last_theta)
 
-        val_acc = network.evaluate(X_val, y_val)[1]
+        val_acc = network.evaluate(X_val, y_val) if regressor else network.evaluate(X_val, y_val)[1]
         res_val.append(val_acc)
+        if len(res_val) > 1:
+            if val_acc < res_val[-2] and save_best_network and k < X_train.shape[1]: 
+                network.save('best_network.keras')
+                minimized = True
         
         print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, MSE = {val_acc:.6f} \n\n")
     
-    return (res_k, res_theta, res_val, res_l)
+    if train_until_k > 0:
+        network.save('best_network.keras')
+
+    return (res_k, res_theta, res_val, res_l, minimized)
 
 
 def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
@@ -217,7 +227,7 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
     lowest_obj = np.inf
 
     for h in history:
-        if h.val_loss < lowest_obj:
+        if h.val_loss < lowest_obj and h.selected.sum() < Xt.shape[1]:
             lowest_obj = h.val_loss
             obj_h = h.selected.data.numpy()
         if h.selected.sum() <= n_features and n_features > 0:
@@ -239,9 +249,27 @@ def return_LassoNet_results(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M
     if starting_lambda == None:
         starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, steps_back=steps_back) / a
 
-    res_k, res_theta, res_val, res_l = train_lasso_path(
+    res_k, res_theta, res_val, res_l, _ = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=mom), ks.losses.MeanSquaredError() if regression else ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
         train_until_k=0, use_faster_fit=faster_fit, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=best_weights,
-        patience=patiences[1], verbose=print_path, use_faster_eval=False)
+        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression)
 
     return (res_k, res_theta, res_val, res_l)
+
+
+def return_LassoNet_mask(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), 
+                            print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, mom=0.9, faster_fit=True, steps_back = 3, best_weights=True, regression=True, n_features=0):
+    if starting_lambda == None:
+        starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, steps_back=steps_back) / a
+
+    res_k, res_theta, res_val, res_l, minimized = train_lasso_path(
+        dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=mom), ks.losses.MeanSquaredError() if regression else ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
+        train_until_k=n_features, use_faster_fit=faster_fit, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=best_weights,
+        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression)
+
+    if not minimized and n_features == 0:
+        1 / 0
+    else:
+        return_model = ks.models.load_model('best_network.keras')
+        
+    return (res_theta[-1], return_model)

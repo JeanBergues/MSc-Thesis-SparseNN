@@ -34,7 +34,7 @@ def main():
     USE_X = False
     USE_SKIP = True
     VALIDATE_LAYER = False
-    DEFAULT_K = [200, 100, 50]
+    DEFAULT_K = [100, 20]
 
     activation      = 'tanh'
     n_cv_reps       = 5
