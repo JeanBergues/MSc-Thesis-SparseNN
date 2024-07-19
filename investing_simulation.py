@@ -93,11 +93,11 @@ def main():
     print("Data has been fully loaded")
 
     best_model_np = [
-        # 'final_forecasts/MAE_NN_1_1_FORECAST',
-        # 'final_forecasts/SLNN_2_0_FORECAST',
-        # 'final_forecasts/NN_2_0_FORECAST',
-        # 'final_forecasts/LR1_NN_1_1_FORECAST',
-        # 'final_forecasts/PLN_1_2_FORECAST',
+        'final_forecasts/SNN_1_0_FORECAST',
+        'final_forecasts/NN_1_0_FORECAST',
+        'final_forecasts/SNN_2_0_FORECAST',
+        'final_forecasts/NN_2_0_FORECAST',
+        'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
     ]
 
     best_model_txt = [
@@ -140,7 +140,7 @@ def main():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['1', '2', '3', '4', '5', 'Long', 'Short']
+    leg = ['SKIP(1, 0)', 'NN(1, 0)', 'SKIP(2, 0)', 'NN(2, 0)', 'NN(2, 2)', 'MIDAS', 'MIDASX', 'GJR-GARCH', 'ARIMA', 'ARIMAX', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))
@@ -160,7 +160,7 @@ def main():
     plt.xlabel("Days")
     plt.ylabel("Cumulative returns")
 
-    # plt.savefig('plots/DNN2_STRAT.eps', format='eps')
+    # plt.savefig('plots/STRAT.eps', format='eps')
     plt.show()
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ import sklearn.metrics as mt
 from network_definitions import return_MLP_estimator, return_MLP_skip_estimator
 from data_loader import load_AR_data, load_data_with_X, scale_data
 from investing_simulation import plot_returns, calc_investment_returns
-from lassonet_implementation import paper_lassonet_mask
+from lassonet_implementation import paper_lassonet_mask, return_LassoNet_mask
 
 ###############################################################################################################################################################################################
 
@@ -34,9 +34,9 @@ def main():
     USE_X = False
     USE_SKIP = True
     VALIDATE_LAYER = False
-    DEFAULT_K = [100, 20]
+    DEFAULT_K = [100]
 
-    activation      = 'tanh'
+    activation      = 'relu'
     n_cv_reps       = 5
     cv_patience     = 100
     n_fm_reps       = 5
@@ -69,8 +69,10 @@ def main():
             Xtrainfull, Xtestfull, ytrain, ytest = ms.train_test_split(X_scaled, y_scaled, test_size=365, shuffle=False)
             print("Data has been fully transformed and split")
 
-            Xt, Xv, yt, yv = ms.train_test_split(Xtrainfull, ytrain, test_size=120, shuffle=False)
-            mask = paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(DEFAULT_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', n_features=0, use_custom_optimizer=True)
+            Xt, Xv, yt, yv = ms.train_test_split(Xtrainfull, ytrain, test_size=30, shuffle=False)
+            # mask = paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(DEFAULT_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', n_features=0, use_custom_optimizer=True)
+            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation=activation, K=DEFAULT_K, verbose=1, patience=fm_patience, epochs=20_000, drop=dropout, lr=learning_rate)
+            mask, best_model = return_LassoNet_mask(initial_model, Xt, Xv, yt, yv, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), starting_lambda=None, n_features=0, a=learning_rate, print_path=True, return_best_model=True)
             mask = np.ravel(mask != 0)
             print(f"Selected {np.sum(mask)} features.")
             Xtrain = Xtrainfull[:,mask]
@@ -78,6 +80,15 @@ def main():
             np.save(f'{EXPERIMENT_NAME}_MASK', mask)
 
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
+            best_model = ks.models.load_model('best_network.keras')
+            best_model.load_weights('best_network.weights.h5')
+
+            test_f = best_model.predict(Xtestfull).ravel()
+            test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+            experiment_mse = mt.mean_squared_error(ytest, test_f)
+            np.save(f'{EXPERIMENT_NAME}_LASSONET_FORECAST', test_f.ravel())
+            print(f"LASSONET MODEL ACHIEVED MSE: {experiment_mse}")
+            1/0
 
             best_val_mse = np.inf
             best_val_mse_sd = 0

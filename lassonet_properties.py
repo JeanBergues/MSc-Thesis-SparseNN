@@ -3,14 +3,9 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import seaborn as sns
-from time import perf_counter_ns
 import keras as ks
-import sklearn.preprocessing as pp
 import sklearn.model_selection as ms
-import sklearn.metrics as mt
-import lassonet as lsn
 import torch as pt
-from functools import partial
 
 np.random.seed(1234)
 tf.random.set_seed(1234)
@@ -27,7 +22,6 @@ def results_plot(HP_opts, HP_results, use=(0, 1), title=r"$B$", name="", show=Tr
     for m, res in zip(HP_opts, HP_results):
         fig = sns.lineplot(x=np.array(res[use[0]]), y=np.array(res[use[1]]), drawstyle='steps-pre', size=10)
     
-    # plt.legend(labels=[f"M={l}" for l in HP_opts])
     legd = fig.get_legend()
     for t, l in zip(legd.texts, HP_opts):
         t.set_text(title + f"={l}")
@@ -51,11 +45,11 @@ freq = 24
 dlag_opt = [7]
 use_hlag = [24]
 
-best_K = [20, 5]
+best_K = [100]
 
 USE_X = False
-USE_PAPER_LASSONET = False
-SHOW = True
+USE_PAPER_LASSONET = True
+SHOW = False
 
 for d_nlags in dlag_opt:
     for h_nlags in use_hlag:
@@ -73,16 +67,16 @@ for d_nlags in dlag_opt:
         print("Data has been fully transformed and split")
 
         n_repeats = 1
+        # Xt, Xv, yt, yv = Xtrain, Xtest, ytrain, ytest
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
         # best_K = [200, 100]
-
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
 
         # Run for M variations
-        HP_opts = [100]
+        HP_opts = [5, 10, 20, 50, 100]
         HP_results = []
-        EXPERIMENT_NAME = "LN_B"
+        EXPERIMENT_NAME = "NPAPER_M_K100"
 
         
         if not USE_PAPER_LASSONET:
@@ -99,70 +93,20 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, _, res_val, res_l = paper_lassonet_results( 
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', use_custom_optimizer=True)
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=hp, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', use_custom_optimizer=True)
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
                 network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
                 res_k, _, res_val, res_l = return_LassoNet_results(
-                    initial_model, Xt, Xv, yt, yv, pm=0.02, M=20, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.01)
+                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.01)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             
             HP_results.append((res_k, res_val, res_l))
 
         # Plot selected features against mse
-        results_plot(HP_opts, HP_results, use=(0, 1), title=r"$B$", name=f"{EXPERIMENT_NAME}_KMSE", show=SHOW)
-        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$B$", name=f"{EXPERIMENT_NAME}_LK", show=SHOW)
-        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$B$", name=f"{EXPERIMENT_NAME}_LMSE", show=SHOW)
-
-        # fig = plt.figure(figsize=(6, 3))
-        # for m, res in zip(HP_opts, HP_results):
-        #     fig = sns.lineplot(x=np.array(res[0]), y=np.array(res[1]), drawstyle='steps-pre', size=10)
-        
-        # # plt.legend(labels=[f"M={l}" for l in HP_opts])
-        # legd = fig.get_legend()
-        # for t, l in zip(legd.texts, HP_opts):
-        #     t.set_text(r"$B$" + f"={l}")
-
-        # sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
-        # plt.xlabel("selected features")
-        # plt.ylabel("mse")
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.eps', format='eps', bbox_inches='tight')
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_KMSE.png', format='png', bbox_inches='tight')
-        # plt.show()
-
-        # # Plot selected features against lambda
-        # fig = plt.figure(figsize=(6, 3))
-        # for m, res in zip(HP_opts, HP_results):
-        #     fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[0]), drawstyle='steps-pre', size=10)
-        
-        # # plt.legend(labels=[f"M={l}" for l in HP_opts])
-        # legd = fig.get_legend()
-        # for t, l in zip(legd.texts, HP_opts):
-        #     t.set_text(r"$B$" + f"={l}")
-
-        # sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
-        # plt.xlabel(r'$\lambda$')
-        # plt.ylabel("selected features")
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.eps', format='eps', bbox_inches='tight')
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_LK.png', format='png', bbox_inches='tight')
-        # plt.show()
-
-        # # Plot mse against lambda
-        # fig = plt.figure(figsize=(6, 3))
-        # for m, res in zip(HP_opts, HP_results):
-        #     fig = sns.lineplot(x=np.array(res[2]), y=np.array(res[1]), drawstyle='steps-pre', size=10)
-        
-        # # plt.legend(labels=[f"M={l}" for l in HP_opts])
-        # legd = fig.get_legend()
-        # for t, l in zip(legd.texts, HP_opts):
-        #     t.set_text(r"$B$" + f"={l}")
-
-        # sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
-        # plt.xlabel(r'$\lambda$')
-        # plt.ylabel("mse")
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.eps', format='eps', bbox_inches='tight')
-        # # plt.savefig(f'plots/{EXPERIMENT_NAME}_LMSE.png', format='png', bbox_inches='tight')
-        # plt.show()
+        results_plot(HP_opts, HP_results, use=(0, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_KMSE", show=SHOW)
+        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$M$", name=f"{EXPERIMENT_NAME}_LK", show=SHOW)
+        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_LMSE", show=SHOW)

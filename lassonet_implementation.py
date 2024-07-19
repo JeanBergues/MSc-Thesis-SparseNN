@@ -80,8 +80,6 @@ def train_lasso_path(network,
             # Update using HIER-PROX
             start_prox = perf_counter_ns()
             theta_new, W_new = hier_prox(network.get_layer('skip_layer').get_weights()[0], network.get_layer('gw_layer').get_weights()[0], lr*l, M)
-            # print(theta_new)
-            # print(lsn.prox(pt.from_numpy(network.get_layer('skip_layer').get_weights()[0]).T, pt.from_numpy(network.get_layer('gw_layer').get_weights()[0]).T, lambda_=lr*l, lambda_bar=0, M=M)[0])
 
             new_skip_layer = network.get_layer('skip_layer').get_weights()
             new_skip_layer[0] = theta_new.reshape((-1, 1))
@@ -130,14 +128,17 @@ def train_lasso_path(network,
         val_acc = network.evaluate(X_val, y_val) if regressor else network.evaluate(X_val, y_val)[1]
         res_val.append(val_acc)
         if len(res_val) > 1:
-            if val_acc < res_val[-2] and save_best_network and k < X_train.shape[1]: 
+            if val_acc < res_val[-2] and save_best_network and k < X_train.shape[1]:
+                print("Saved new best model") 
                 network.save('best_network.keras')
+                network.save_weights('best_network.weights.h5')
                 minimized = True
         
         print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, MSE = {val_acc:.6f} \n\n")
     
     if train_until_k > 0:
         network.save('best_network.keras')
+        network.save_weights('best_network.weights.h5')
 
     return (res_k, res_theta, res_val, res_l, minimized)
 
@@ -258,18 +259,25 @@ def return_LassoNet_results(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M
 
 
 def return_LassoNet_mask(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), 
-                            print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, mom=0.9, faster_fit=True, steps_back = 3, best_weights=True, regression=True, n_features=0):
+                            print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, mom=0.9, faster_fit=True, steps_back = 3, best_weights=True, regression=True, n_features=0, return_best_model=False):
     if starting_lambda == None:
         starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, steps_back=steps_back) / a
 
+    return_model = None
     res_k, res_theta, res_val, res_l, minimized = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=mom), ks.losses.MeanSquaredError() if regression else ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
         train_until_k=n_features, use_faster_fit=faster_fit, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=best_weights,
-        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression)
+        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression, save_best_network=return_best_model)
+    
+    best_theta = res_theta[-1]
+    best_v = np.inf
+    for i, v in enumerate(res_val):
+        if v < best_v:
+            best_v = v
+            best_theta = res_theta[i]
 
-    if not minimized and n_features == 0:
-        1 / 0
-    else:
+    if return_best_model:
         return_model = ks.models.load_model('best_network.keras')
+        return_model.load_weights('best_network.weights.h5')
         
-    return (res_theta[-1], return_model)
+    return (best_theta, return_model)
