@@ -11,7 +11,7 @@ import time as time
 import lassonet as ln
 import dieboldmariano as dm
 
-def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
+def calc_investment_returns(forecast, real, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
     value = start_val
     path = np.zeros(len(real))
     prev_pos = 0

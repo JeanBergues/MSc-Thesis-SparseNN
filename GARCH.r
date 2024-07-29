@@ -2,8 +2,7 @@ library(readr)
 library(rugarch)
 
 df <- read.csv('pct_btc_day.csv')
-#hour_data <- read.csv('agg_btc_hour.csv')
-#min_data <- read.csv('agg_btc_min.csv')
+#df <- read.csv('pct_btc_hour.csv')
 
 calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_threshold=TRUE) {
   T <- length(real)
@@ -44,7 +43,7 @@ val <- 120
 
 rtr <- rdf[1:(length(rdf)-split - val)]
 rva <- rdf[(val+1):split]
-rtf <- rdf[1:split]
+rtf <- rdf[1:(length(rdf)-split)]
 rts <- rdf[(length(rdf)-split+1):length(rdf)]
 
 best_mse <- 1e10
@@ -54,15 +53,15 @@ best_q <- 0
 best_a <- 0
 best_b <- 0
 
-try_p <- 1:2
-try_o <- 0:2
-try_q <- 0:2
-try_a <- 1:2
-try_b <- 0:2
+try_p <- 1
+try_o <- 1
+try_q <- 1
+try_a <- 3:4
+try_b <- 3:4
 
-estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
+estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE, type='gjrGARCH') {
   spec <- ugarchspec(
-    variance.model = list(model = "gjrGARCH", garchOrder = c(p, o, q)),
+    variance.model = list(model = type, garchOrder = c(p, o, q)),
     mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE),
     distribution.model = "std"
   )
@@ -81,7 +80,23 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   mse <- (1/length(yv)) * sum((yv - forc)^2)
   r <- calc_invest_return(forc, yv)
   
-  return (list(r=r, mse=mse, forc=forc, fit=model))
+  return (list(r=r, mse=mse, forc=forc, fit=model, vol=as.numeric(forc_results@forecast$sigmaFor)))
+}
+
+estimate_rolling_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
+  spec <- ugarchspec(
+    variance.model = list(model = "gjrGARCH", garchOrder = c(p, o, q)),
+    mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE),
+    distribution.model = "std"
+  )
+  
+  roll <- ugarchroll(spec=spec, data=yt, forecast.length=365, refit.every=30)
+  forc <- roll@forecast$density$Mu
+  
+  mse <- (1/length(yv)) * sum((yv - forc)^2)
+  r <- calc_invest_return(forc, yv)
+  
+  return (list(r=r, mse=mse, forc=forc, fit=roll, vol=roll@forecast))
 }
 
 for (p in try_p) {
@@ -110,7 +125,8 @@ for (p in try_p) {
 
 # Compare against predicting mean
 #fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
-fm <- estimate_garch_model(rdf, rts, 1, 0, 1, 1, 0, summ=TRUE)
+fm <- estimate_garch_model(rdf, rts, 1, 1, 1, 1, 0, summ=TRUE, type='gjrGARCH')
+#rm <- estimate_rolling_garch_model(rdf, rts, 1, 0, 1, 1, 0, summ=TRUE)
 
 print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
@@ -121,10 +137,18 @@ shorting_dev <- calc_invest_return(rep(-1, length(rts)), rts, use_threshold=FALS
 
 plot(rts, type='l', col='black')
 lines(fm$forc, type='l', col='red')
+lines(fm$vol, type='l', col='blue')
+
+plot(rtf, type='l', col='black')
+lines(fm$fit@fit$fitted.values, type='l', col='red')
+lines(fm$fit@fit$sigma, type='l', col='blue')
 
 plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev, shorting_dev), max(budget_mse_dev, holding_dev, shorting_dev)))
 lines(budget_mse_dev, type='l', col='red')
 lines(shorting_dev, type='l', col='blue')
 
 write(fm$forc, file="final_R_forecasts/garch_test.txt")
+write(fm$vol, file="final_R_forecasts/garch_vol.txt")
+write(fm$fit@fit$fitted.values, file="final_R_forecasts/garch_train.txt")
+write(fm$fit@fit$sigma, file="final_R_forecasts/garch_train_vol.txt")
 print("DONE")
