@@ -182,7 +182,8 @@ full_mse <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, h
 full_ret <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, hlag=best_r_hlag, mlag=best_r_mlag, summ=FALSE)
 print(full_ret$co)
 
-write(full_mse$frc, file="final_R_forecasts/MIDAS_test.txt")
+write(full_mse$frc, file="final_R_forecasts/MIDAS_test.txt", ncolumns=1)
+write(full_mse$model$fitted.values, file="final_R_forecasts/MIDAS_train.txt", ncolumns=1)
 #write(full_ret$frc, file="txt_forecast/amidas_day_r_test.txt")
 
 print(summary(full_mse$model))

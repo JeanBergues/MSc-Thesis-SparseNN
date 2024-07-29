@@ -96,7 +96,7 @@ estimate_rolling_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   mse <- (1/length(yv)) * sum((yv - forc)^2)
   r <- calc_invest_return(forc, yv)
   
-  return (list(r=r, mse=mse, forc=forc, fit=roll, vol=roll@forecast))
+  return (list(r=r, mse=mse, forc=forc, fit=roll, fullf=roll@forecast))
 }
 
 for (p in try_p) {
@@ -126,7 +126,7 @@ for (p in try_p) {
 # Compare against predicting mean
 #fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
 fm <- estimate_garch_model(rdf, rts, 1, 1, 1, 1, 0, summ=TRUE, type='gjrGARCH')
-#rm <- estimate_rolling_garch_model(rdf, rts, 1, 0, 1, 1, 0, summ=TRUE)
+rm <- estimate_rolling_garch_model(rdf, rts, 1, 1, 1, 1, 0, summ=TRUE)
 
 print((1/split) * sum((rts - fm$forc)^2))
 print((1/split) * sum((rts - mean(rtr))^2))
@@ -147,8 +147,10 @@ plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev,
 lines(budget_mse_dev, type='l', col='red')
 lines(shorting_dev, type='l', col='blue')
 
-write(fm$forc, file="final_R_forecasts/garch_test.txt")
-write(fm$vol, file="final_R_forecasts/garch_vol.txt")
-write(fm$fit@fit$fitted.values, file="final_R_forecasts/garch_train.txt")
-write(fm$fit@fit$sigma, file="final_R_forecasts/garch_train_vol.txt")
+write(fm$forc, file="final_R_forecasts/garch_test.txt", ncolumns=1)
+write(fm$vol, file="final_R_forecasts/garch_vol.txt", ncolumns=1)
+write(rm$fullf$density$Mu, file="final_R_forecasts/roll_garch_test.txt", ncolumns=1)
+write(rm$fullf$density$Sigma, file="final_R_forecasts/roll_garch_vol.txt", ncolumns=1)
+write(fm$fit@fit$fitted.values, file="final_R_forecasts/garch_train.txt", ncolumns=1)
+write(fm$fit@fit$sigma, file="final_R_forecasts/garch_train_vol.txt", ncolumns=1)
 print("DONE")

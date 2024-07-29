@@ -16,8 +16,8 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1, 2]
-    hlag_opt = [0, 1, 3, 6, 12, 24]
+    dlag_opt = [2]
+    hlag_opt = [0]
 
     # dlag_opt = [7]
     # hlag_opt = [24]
@@ -34,20 +34,20 @@ def main():
     
     USE_X = False
     USE_SKIP = True
-    VALIDATE_LAYER = True
-    DEFAULT_K = []
+    VALIDATE_LAYER = False
+    DEFAULT_K = [50]
 
     activation      = 'tanh'
     n_cv_reps       = 5
     cv_patience     = 100
-    n_fm_reps       = 10
+    n_fm_reps       = 1
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
     dropout         = 0
     use_l1_penalty  = False
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/B"
+    BASE_EXPERIMENT_NAME = "final_forecasts/NEW_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
 
@@ -162,6 +162,7 @@ def main():
                     best_final_val_mse = val_mse
                     best_final_mse = experiment_mse
                     test_forecast = test_f
+                    train_forecast = train_f
                 if experiment_mse < best_test_mse:
                     best_test_mse = experiment_mse
                     best_test_forecast = test_f
@@ -183,6 +184,7 @@ def main():
             
             np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse, best_final_val_mse, best_test_mse, val_returns, final_returns]))
             np.save(f'{EXPERIMENT_NAME}_FORECAST', test_forecast.ravel())
+            np.save(f'{EXPERIMENT_NAME}_TRAIN_FORECAST', train_forecast.ravel())
             np.save(f'{EXPERIMENT_NAME}_TEST_FORECAST', best_test_forecast.ravel())
             np.save(f'{EXPERIMENT_NAME}_RETURN_FORECAST', best_return_forecast.ravel())
 
