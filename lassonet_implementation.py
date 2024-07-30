@@ -3,6 +3,9 @@ from time import perf_counter_ns
 import keras as ks
 import tensorflow as tf
 
+import lassonet as lsn
+import torch as pt
+
 def estimate_starting_lambda(theta, W, M, starting_lambda = 1e-5, factor = 2, tol = 1e-6, max_iter_per_lambda = 10000, verbose=False, steps_back = 3):
     initial_theta = theta
     dense_W = W
@@ -44,13 +47,17 @@ def train_lasso_path(network,
                      patience = 10, 
                      verbose=False,
                      regressor=True,
-                     save_best_network=False):
+                     save_best_network=False,
+                     L1_penalty = True,
+                     X_test = None,
+                     y_test = None):
     
     minimized = False
     res_k = []
     res_theta = []
     res_val = []
     res_l = []
+    res_oos = []
     l = starting_lambda / (1 + pm)
     k = X_train.shape[1]
 
@@ -98,6 +105,8 @@ def train_lasso_path(network,
                 val_obj = loss_func(y_val, val_logits)
             else:
                 val_obj = network.evaluate(X_val, y_val, verbose='0') if regressor else network.evaluate(X_val, y_val, verbose='0')[0]
+                if L1_penalty:
+                    val_obj += l * np.sum(np.abs(theta_new))
 
             train_time += perf_counter_ns() - start_train
 
@@ -127,6 +136,11 @@ def train_lasso_path(network,
 
         val_acc = network.evaluate(X_val, y_val) if regressor else network.evaluate(X_val, y_val)[1]
         res_val.append(val_acc)
+
+        if X_test is not None:
+            test_acc = network.evaluate(X_test, y_test) if regressor else network.evaluate(X_test, y_test)[1]
+            res_oos.append(test_acc)
+
         if len(res_val) > 1:
             if val_acc < res_val[-2] and save_best_network and k < X_train.shape[1]:
                 print("Saved new best model") 
@@ -140,10 +154,13 @@ def train_lasso_path(network,
         network.save('best_network.keras')
         network.save_weights('best_network.weights.h5')
 
-    return (res_k, res_theta, res_val, res_l, minimized)
+    if X_test is not None:
+        return (res_k, res_theta, res_val, res_l, res_oos)
+    else:
+        return (res_k, res_theta, res_val, res_l, minimized)
 
 
-def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.ndarray, np.ndarray]:
+def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float, stable=True) -> tuple[np.ndarray, np.ndarray]:
     # Check if the shapes are correct
     theta = theta.ravel()
     d = theta.shape[0]
@@ -163,7 +180,10 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     # Check for condition
     upper_bound = np.concatenate([np.repeat(np.inf, d).reshape((-1, 1)), sorted_W], axis=1)
     lower_bound = np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)
-    m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
+    if stable:
+        m_tilde_condition = np.logical_and(w_m >= lower_bound, w_m >= lower_bound)
+    else:
+        m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
 
     # Select only the first true value
     first_m_tilde = m_tilde_condition.cumsum(axis=1).cumsum(axis=1) == 1

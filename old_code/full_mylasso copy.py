@@ -13,9 +13,8 @@ import lassonet as lsn
 
 def train_dense_model(X_train, X_val, y_train, y_val, output_size, optimizer, loss_func, metrics, activation='relu', include_bias=True, neurons=[100], patience=100, epochs=1000, verbose=0, drop=0):
     inp = ks.layers.Input(shape=(X_train.shape[1],))
-    skip = ks.layers.Dense(units=1, activation='linear', use_bias=include_bias, name='skip_layer')(inp)
-    dp = ks.layers.Dropout(drop)(inp)
-    gw = ks.layers.Dense(units=neurons[0], activation=activation, name='gw_layer')(dp)
+    skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
+    gw = ks.layers.Dense(units=neurons[0], activation=activation, name='gw_layer')(inp)
 
     if len(neurons) > 1:
         for K in neurons[1:]:
@@ -106,7 +105,8 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float) -> tuple[np.
     # Check for condition
     upper_bound = np.concatenate([np.repeat(np.inf, d).reshape((-1, 1)), sorted_W], axis=1)
     lower_bound = np.concatenate((sorted_W, np.zeros((d, 1))), axis=1)
-    m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
+    # m_tilde_condition = np.logical_and(w_m <= upper_bound, w_m >= lower_bound)
+    m_tilde_condition = np.logical_and(w_m >= lower_bound, w_m >= lower_bound)
 
     first_m_tilde = m_tilde_condition.cumsum(axis=1).cumsum(axis=1) == 1
     m_tilde = w_m[first_m_tilde]
@@ -236,7 +236,7 @@ def train_lasso_path(network,
                 val_logits = network(X_val, training=False)
                 val_obj = loss_func(y_val, val_logits)
             else:
-                val_obj = network.evaluate(X_val, y_val, verbose='0')[1]
+                val_obj = network.evaluate(X_val, y_val, verbose='0')[0] + l * np.sum(np.abs(theta_new))
 
             train_time += perf_counter_ns() - start_train
 
@@ -345,12 +345,12 @@ def main() -> None:
     B               = 100
     M               = 10
     a               = 1e-3
-    e               = 0.02
+    e               = 0.05
 
     sparse_opt = ks.optimizers.SGD(learning_rate=a, momentum=0.9)
 
     # Train the dense model
-    nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, dense_opt, loss, metrics, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs)
+    nn = train_dense_model(X_train, X_val, y_train, y_val, n_classes, dense_opt, loss, metrics, neurons=layer_size, include_bias=bias, patience=dense_patience, epochs=max_epochs, verbose=1)
     if calculate_out_of_sample_accuracy: fm_result = nn.evaluate(X_test, y_test)
 
     # Recompile model for regularization path
