@@ -11,6 +11,32 @@ import time as time
 import lassonet as ln
 import dieboldmariano as dm
 
+def calc_investment_returns_with_Sharpe(forecast_train, forecast, real, vol_train, vol_test, allow_empty=False, start_val=1, trad_cost=0.001, alpha=0.05):
+    value = start_val
+    path = np.zeros(len(real))
+    prev_pos = 1 * np.sign(forecast[0])
+
+    train_sharp_ratios = forecast_train / np.sqrt(vol_train[-len(forecast_train):])
+    uqtl = np.quantile(train_sharp_ratios, 1-alpha)
+    lqtl = np.quantile(train_sharp_ratios, alpha)
+
+    for t, (f, r) in enumerate(zip(forecast, real)):
+        sharpe = f / np.sqrt(vol_test[t])
+
+        pos = prev_pos
+        if sharpe < lqtl:
+            pos = -1
+        elif sharpe > uqtl:
+            pos = 1
+
+        if pos != prev_pos: value = value * (1 - trad_cost)
+        prev_pos = pos
+
+        value = value * (1 + pos * r/100)
+        path[t] = value
+
+    return (value / start_val - 1, path)
+
 def calc_investment_returns(forecast, real, ytrain, allow_empty=False, start_val=1, trad_cost=0.001, use_thresholds=True):
     value = start_val
     path = np.zeros(len(real))
@@ -92,47 +118,71 @@ def main():
     ytrain, ytest = ms.train_test_split(y_raw, test_size=365, shuffle=False)
     print("Data has been fully loaded")
 
-    best_model_np = [
-        'final_forecasts/SNN_1_0_FORECAST',
-        'final_forecasts/NN_1_0_FORECAST',
-        'final_forecasts/SNN_2_0_FORECAST',
-        'final_forecasts/NN_2_0_FORECAST',
-        'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
+    best_model_test_np = [
+        'final_forecasts/NEW_SNN_1_24_FORECAST',
+        'final_forecasts/NEW_SNN_2_0_FORECAST',
+        # 'final_forecasts/NN_1_0_FORECAST',
+        # 'final_forecasts/SNN_2_0_FORECAST',
+        # 'final_forecasts/NN_2_0_FORECAST',
+        # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
     ]
 
-    best_model_txt = [
+    best_model_train_np = [
+        'final_forecasts/NEW_SNN_1_24_TRAIN_FORECAST',
+        'final_forecasts/NEW_SNN_2_0_TRAIN_FORECAST',
+        # 'final_forecasts/NN_1_0_FORECAST',
+        # 'final_forecasts/SNN_2_0_FORECAST',
+        # 'final_forecasts/NN_2_0_FORECAST',
+        # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
+    ]
+
+    best_model_test_txt = [
         'final_R_forecasts/MIDAS_test',
-        'final_R_forecasts/MIDASX_test',
+        # 'final_R_forecasts/MIDASX_test',
         'final_R_forecasts/garch_test',
-        'final_R_forecasts/arima_day_test',
-        'final_R_forecasts/arimaX_day_test',
+        'final_R_forecasts/roll_garch_test',
+        # 'final_R_forecasts/arima_day_test',
+        # 'final_R_forecasts/arimaX_day_test',
+    ]
+
+    best_model_train_txt = [
+        'final_R_forecasts/MIDAS_train',
+        # 'final_R_forecasts/MIDASX_test',
+        'final_R_forecasts/garch_train',
+        'final_R_forecasts/garch_train',
+        # 'final_R_forecasts/arima_day_test',
+        # 'final_R_forecasts/arimaX_day_test',
     ]
 
     paths_to_plot = {}
     series_to_test = {}
     WITH_STRATEGY = False
 
-    for m in best_model_np:
-        fc = np.load(f'{m}.npy')[-365:]
-        print(f"Examining {m}")
-        print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-        fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=WITH_STRATEGY, ytrain=ytrain)
-        print(f"RETURN: {fret*100:.2f}")
-        paths_to_plot[m] = investing_results
-        series_to_test[m] = fc
+    train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel()
+    test_vol = np.loadtxt(f'final_R_forecasts/roll_garch_vol.txt').ravel()
 
-    for m in best_model_txt:
-        fc = np.loadtxt(f'{m}.txt', delimiter=' ').ravel()[-365:]
-        print(f"Examining {m}")
+    for mtest, mtrain in zip(best_model_test_np, best_model_train_np):
+        fc = np.load(f'{mtest}.npy').ravel()[-365:]
+        tfc = np.load(f'{mtrain}.npy').ravel()
+        print(f"Examining {mtest}")
         print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-        fret, investing_results = calc_investment_returns(fc, ytest, trad_cost=0.001, allow_empty=True, use_thresholds=WITH_STRATEGY, ytrain=ytrain)
+        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, allow_empty=True)
         print(f"RETURN: {fret*100:.2f}")
-        paths_to_plot[m] = investing_results
-        series_to_test[m] = fc
+        paths_to_plot[mtest] = investing_results
+        series_to_test[mtest] = fc
 
-    hret, holding_results = calc_investment_returns(np.ones_like(ytest).ravel(), ytest, trad_cost=0, use_thresholds=False, ytrain=ytrain)
-    sret, shorting_results = calc_investment_returns(-1*np.ones_like(ytest).ravel(), ytest, trad_cost=0, use_thresholds=False, ytrain=ytrain)
-    oret, optimal_results = calc_investment_returns(ytest, ytest, trad_cost=0, use_thresholds=False, ytrain=ytrain)
+    for mtest, mtrain in zip(best_model_test_txt, best_model_train_txt):
+        fc = np.loadtxt(f'{mtest}.txt').ravel()[-365:]
+        tfc = np.loadtxt(f'{mtrain}.txt').ravel()
+        print(f"Examining {mtest}")
+        print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
+        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, allow_empty=True)
+        print(f"RETURN: {fret*100:.2f}")
+        paths_to_plot[mtest] = investing_results
+        series_to_test[mtest] = fc
+
+    hret, holding_results = calc_investment_returns(np.ones_like(ytest).ravel(), ytest, None, trad_cost=0, use_thresholds=False)
+    sret, shorting_results = calc_investment_returns(-1*np.ones_like(ytest).ravel(), ytest, None, trad_cost=0, use_thresholds=False)
     print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
 
     # benchmark = np.load(f'skipx_forc/SKIPXA_day_test_1_1.npy')[-365:]

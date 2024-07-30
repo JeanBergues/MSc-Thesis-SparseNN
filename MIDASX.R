@@ -135,7 +135,7 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
   return (list(mse=mse, r=rt, frc=midas_forecast$mean, co=co, model=midas_model))
 }
 
-try_hlags <- 1:14
+try_hlags <- 1:24
 try_mlags <- 0
 
 best_mse <- 1e10
