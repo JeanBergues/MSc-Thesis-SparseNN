@@ -38,10 +38,12 @@ calc_invest_return <- function(frc, real, start_v = 1, t_cost=0.0015, use_thresh
 
 # Actually perform GARCH estimation
 rdf <- df$close
+Xdf <- as.matrix(df[c(-4)])
 split <- 365
 val <- 120
 
 rtr <- rdf[1:(length(rdf)-split - val)]
+Xtf <- df[c(-4)][1:(length(rdf)-split),]
 rva <- rdf[(val+1):split]
 rtf <- rdf[1:(length(rdf)-split)]
 rts <- rdf[(length(rdf)-split+1):length(rdf)]
@@ -62,7 +64,7 @@ try_b <- 3:4
 estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE, type='gjrGARCH') {
   spec <- ugarchspec(
     variance.model = list(model = type, garchOrder = c(p, o, q)),
-    mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE),
+    mean.model = list(armaOrder = c(a, b), include.mean = TRUE, archm = TRUE, external.regressors=Xdf),
     distribution.model = "std"
   )
   
@@ -99,23 +101,25 @@ estimate_rolling_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   return (list(r=r, mse=mse, forc=forc, fit=roll, fullf=roll@forecast))
 }
 
-for (p in try_p) {
-  for (o in try_o) {
-    for (q in try_q) {
-      for (a in try_a) {
-        for (b in try_b) {
-          #result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
-          
-          if (result$mse < best_mse) {
-            best_mse <- result$mse
-            best_p <- p
-            best_o <- o
-            best_q <- q
-            best_a <- a
-            best_b <- b
+if(FALSE) {
+  for (p in try_p) {
+    for (o in try_o) {
+      for (q in try_q) {
+        for (a in try_a) {
+          for (b in try_b) {
+            #result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
+            
+            if (result$mse < best_mse) {
+              best_mse <- result$mse
+              best_p <- p
+              best_o <- o
+              best_q <- q
+              best_a <- a
+              best_b <- b
+            }
+            
+            print(result$mse)
           }
-          
-          print(result$mse)
         }
       }
     }
@@ -147,10 +151,10 @@ plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev,
 lines(budget_mse_dev, type='l', col='red')
 lines(shorting_dev, type='l', col='blue')
 
-#write(fm$forc, file="final_R_forecasts/garch_test.txt", ncolumns=1)
-#write(fm$vol, file="final_R_forecasts/garch_vol.txt", ncolumns=1)
-#write(rm$fullf$density$Mu, file="final_R_forecasts/roll_garch_test.txt", ncolumns=1)
-#write(rm$fullf$density$Sigma, file="final_R_forecasts/roll_garch_vol.txt", ncolumns=1)
-#write(fm$fit@fit$fitted.values, file="final_R_forecasts/garch_train.txt", ncolumns=1)
-#write(fm$fit@fit$sigma, file="final_R_forecasts/garch_train_vol.txt", ncolumns=1)
+write(fm$forc, file="final_R_forecasts/garchX_test.txt", ncolumns=1)
+#write(fm$vol, file="final_R_forecasts/garchX_vol.txt", ncolumns=1)
+#write(rm$fullf$density$Mu, file="final_R_forecasts/roll_garchX_test.txt", ncolumns=1)
+#write(rm$fullf$density$Sigma, file="final_R_forecasts/roll_garchX_vol.txt", ncolumns=1)
+#write(fm$fit@fit$fitted.values, file="final_R_forecasts/garchX_train.txt", ncolumns=1)
+#write(fm$fit@fit$sigma, file="final_R_forecasts/garchX_train_vol.txt", ncolumns=1)
 print("DONE")

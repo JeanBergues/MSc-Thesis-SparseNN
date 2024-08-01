@@ -11,14 +11,14 @@ import time as time
 import lassonet as ln
 import dieboldmariano as dm
 
-def calc_investment_returns_with_Sharpe(forecast_train, forecast, real, vol_train, vol_test, allow_empty=False, start_val=1, trad_cost=0.001, alpha=0.05):
+def calc_investment_returns_with_Sharpe(forecast_train, forecast, real, vol_train, vol_test, use_quantiles=False, start_val=1, trad_cost=0.001, alpha=0.05):
     value = start_val
     path = np.zeros(len(real))
     prev_pos = 1 * np.sign(forecast[0])
 
     train_sharp_ratios = forecast_train / np.sqrt(vol_train[-len(forecast_train):])
-    uqtl = np.quantile(train_sharp_ratios, 1-alpha)
-    lqtl = np.quantile(train_sharp_ratios, alpha)
+    uqtl = np.quantile(train_sharp_ratios, 1-alpha) if use_quantiles else 0
+    lqtl = np.quantile(train_sharp_ratios, alpha) if use_quantiles else 0
 
     for t, (f, r) in enumerate(zip(forecast, real)):
         sharpe = f / np.sqrt(vol_test[t])
@@ -121,7 +121,7 @@ def main():
     best_model_test_np = [
         'final_forecasts/NEW_SNN_1_24_FORECAST',
         'final_forecasts/NEW_SNN_2_0_FORECAST',
-        # 'final_forecasts/NN_1_0_FORECAST',
+        'final_forecasts/CV_SNN_1_0_FORECAST',
         # 'final_forecasts/SNN_2_0_FORECAST',
         # 'final_forecasts/NN_2_0_FORECAST',
         # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
@@ -130,7 +130,7 @@ def main():
     best_model_train_np = [
         'final_forecasts/NEW_SNN_1_24_TRAIN_FORECAST',
         'final_forecasts/NEW_SNN_2_0_TRAIN_FORECAST',
-        # 'final_forecasts/NN_1_0_FORECAST',
+        'final_forecasts/CV_SNN_1_0_TRAIN_FORECAST',
         # 'final_forecasts/SNN_2_0_FORECAST',
         # 'final_forecasts/NN_2_0_FORECAST',
         # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
@@ -140,7 +140,7 @@ def main():
         'final_R_forecasts/MIDAS_test',
         # 'final_R_forecasts/MIDASX_test',
         'final_R_forecasts/garch_test',
-        'final_R_forecasts/roll_garch_test',
+        'final_R_forecasts/garchX_test',
         # 'final_R_forecasts/arima_day_test',
         # 'final_R_forecasts/arimaX_day_test',
     ]
@@ -156,17 +156,20 @@ def main():
 
     paths_to_plot = {}
     series_to_test = {}
-    WITH_STRATEGY = False
+    WITH_SHARPE = True
+    USE_QUANTILES = True
 
-    train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel()
-    test_vol = np.loadtxt(f'final_R_forecasts/roll_garch_vol.txt').ravel()
+    train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytrain)
+    test_vol = np.loadtxt(f'final_R_forecasts/garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
 
     for mtest, mtrain in zip(best_model_test_np, best_model_train_np):
         fc = np.load(f'{mtest}.npy').ravel()[-365:]
         tfc = np.load(f'{mtrain}.npy').ravel()
         print(f"Examining {mtest}")
         print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, allow_empty=True)
+        print(f"MAPE: {mt.mean_absolute_percentage_error(ytest, fc):.3f}")
+        print(f"%Correct: {np.sum(np.sign(ytest) == np.sign(fc)) / len(fc) * 100:.3f}%")
+        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, use_quantiles=USE_QUANTILES)
         print(f"RETURN: {fret*100:.2f}")
         paths_to_plot[mtest] = investing_results
         series_to_test[mtest] = fc
@@ -176,7 +179,9 @@ def main():
         tfc = np.loadtxt(f'{mtrain}.txt').ravel()
         print(f"Examining {mtest}")
         print(f"MSE: {mt.mean_squared_error(ytest, fc):.3f}")
-        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, allow_empty=True)
+        print(f"MAPE: {mt.mean_absolute_percentage_error(ytest, fc):.3f}")
+        print(f"%Correct: {np.sum(np.sign(ytest) == np.sign(fc)) / len(fc) * 100:.3f}%")
+        fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, use_quantiles=USE_QUANTILES)
         print(f"RETURN: {fret*100:.2f}")
         paths_to_plot[mtest] = investing_results
         series_to_test[mtest] = fc
@@ -184,13 +189,15 @@ def main():
     hret, holding_results = calc_investment_returns(np.ones_like(ytest).ravel(), ytest, None, trad_cost=0, use_thresholds=False)
     sret, shorting_results = calc_investment_returns(-1*np.ones_like(ytest).ravel(), ytest, None, trad_cost=0, use_thresholds=False)
     print(f"Only mean MSE: {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+    print(f"Only mean MAPE: {mt.mean_absolute_percentage_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+    print(f"Only mean %Correct: {np.sum(np.sign(ytest) == np.sign(np.full_like(ytest, np.mean(ytrain)))) / len(ytest) * 100:.3f}%")
 
     # benchmark = np.load(f'skipx_forc/SKIPXA_day_test_1_1.npy')[-365:]
     # for k, v in series_to_test.items():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['SKIP(1, 0)', 'NN(1, 0)', 'SKIP(2, 0)', 'NN(2, 0)', 'NN(2, 2)', 'MIDAS', 'MIDASX', 'GJR-GARCH', 'ARIMA', 'ARIMAX', 'Long', 'Short']
+    leg = ['SKIP(1, 24)', 'SKIP(2, 0)', 'CVSKIP(2, 0)', 'MIDAS', 'GARCH', 'GARCHX', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))
