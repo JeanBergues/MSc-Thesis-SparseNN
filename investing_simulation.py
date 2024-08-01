@@ -160,7 +160,7 @@ def main():
     USE_QUANTILES = True
 
     train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytrain)
-    test_vol = np.loadtxt(f'final_R_forecasts/garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
+    test_vol = np.loadtxt(f'final_R_forecasts/roll_garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
 
     for mtest, mtrain in zip(best_model_test_np, best_model_train_np):
         fc = np.load(f'{mtest}.npy').ravel()[-365:]
