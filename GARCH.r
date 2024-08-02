@@ -99,23 +99,25 @@ estimate_rolling_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   return (list(r=r, mse=mse, forc=forc, fit=roll, fullf=roll@forecast))
 }
 
-for (p in try_p) {
-  for (o in try_o) {
-    for (q in try_q) {
-      for (a in try_a) {
-        for (b in try_b) {
-          #result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
-          
-          if (result$mse < best_mse) {
-            best_mse <- result$mse
-            best_p <- p
-            best_o <- o
-            best_q <- q
-            best_a <- a
-            best_b <- b
+if(FALSE) {
+  for (p in try_p) {
+    for (o in try_o) {
+      for (q in try_q) {
+        for (a in try_a) {
+          for (b in try_b) {
+            #result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
+            
+            if (result$mse < best_mse) {
+              best_mse <- result$mse
+              best_p <- p
+              best_o <- o
+              best_q <- q
+              best_a <- a
+              best_b <- b
+            }
+            
+            print(result$mse)
           }
-          
-          print(result$mse)
         }
       }
     }

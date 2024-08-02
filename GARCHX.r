@@ -71,7 +71,8 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE, type='gjrGAR
   model <- ugarchfit(
     data=yt,
     out.sample = length(yv),
-    spec=spec
+    spec=spec,
+    ex
   )
   
   if (summ) {print(model)}

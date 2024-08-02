@@ -192,6 +192,11 @@ def main():
     print(f"Only mean MAPE: {mt.mean_absolute_percentage_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
     print(f"Only mean %Correct: {np.sum(np.sign(ytest) == np.sign(np.full_like(ytest, np.mean(ytrain)))) / len(ytest) * 100:.3f}%")
 
+    y_prev = y_raw[-366:-1]
+    print(f"Repeat MSE: {mt.mean_squared_error(ytest, y_prev):.3f}")
+    print(f"Repeat MAPE: {mt.mean_absolute_percentage_error(ytest, y_prev):.3f}")
+    print(f"Repeat %Correct: {np.sum(np.sign(ytest) == np.sign(y_prev)) / len(ytest) * 100:.3f}%")
+
     # benchmark = np.load(f'skipx_forc/SKIPXA_day_test_1_1.npy')[-365:]
     # for k, v in series_to_test.items():
     #     print(k)

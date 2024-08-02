@@ -45,11 +45,11 @@ freq = 24
 dlag_opt = [7]
 use_hlag = [24]
 
-best_K = [100]
+best_K = [50]
 
 USE_X = False
-USE_PAPER_LASSONET = True
-SHOW = False
+USE_PAPER_LASSONET = False
+SHOW = True
 
 for d_nlags in dlag_opt:
     for h_nlags in use_hlag:
@@ -68,15 +68,15 @@ for d_nlags in dlag_opt:
 
         n_repeats = 1
         # Xt, Xv, yt, yv = Xtrain, Xtest, ytrain, ytest
-        ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
+        #ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
         # best_K = [200, 100]
-        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=120, shuffle=False)
+        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
 
         # Run for M variations
-        HP_opts = [5, 10, 20, 50, 100]
+        HP_opts = [20]
         HP_results = []
-        EXPERIMENT_NAME = "NPAPER_M_K100"
+        EXPERIMENT_NAME = "NEW_CRIT_M_K10"
 
         
         if not USE_PAPER_LASSONET:
@@ -99,12 +99,12 @@ for d_nlags in dlag_opt:
                 network.set_weights(initial_model_best_weights)
                 network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
-                res_k, _, res_val, res_l = return_LassoNet_results(
-                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.01)
+                res_k, _, res_val, res_l, res_oos, final_net = return_LassoNet_results(
+                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 1000), print_path=True, print_lambda=True, starting_lambda=None, a=0.01, Xtest=Xtest, ytest=ytest)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             
-            HP_results.append((res_k, res_val, res_l))
+            HP_results.append((res_k, res_oos, res_l))
 
         # Plot selected features against mse
         results_plot(HP_opts, HP_results, use=(0, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_KMSE", show=SHOW)

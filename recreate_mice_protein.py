@@ -35,24 +35,24 @@ np.random.seed(1234)
 tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
-# paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=1)
-# paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
-# lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
-# plt.show()
+paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=1, n_iters=(1000, 1000))
+paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
+lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
+plt.show()
 
-dense = return_MLP_skip_classifier(X_train, X_val, y_train, y_val, 8, K=[100], epochs=1000, verbose=1, lr=a, activation='relu')
-# starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / 0.001
+# dense = return_MLP_skip_classifier(X_train, X_val, y_train, y_val, 8, K=[100], epochs=1000, verbose=1, lr=a, activation='relu')
+# # starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / 0.001
 
-dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+# dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
 
-res_k, res_theta, res_val, res_l, oos = train_lasso_path(
-    dense, 6, X_train, X_val, y_train, y_val, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
-    train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=100, use_best_weights=True,
-    patience=10, verbose=True, use_faster_eval=False, regressor=False, X_test=X_test, y_test=y_test)
+# res_k, res_theta, res_val, res_l, oos, final_net = train_lasso_path(
+#     dense, 6, X_train, X_val, y_train, y_val, ks.optimizers.SGD(learning_rate=a, momentum=0.9), ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
+#     train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=100, use_best_weights=True,
+#     patience=10, verbose=True, use_faster_eval=False, regressor=False, X_test=X_test, y_test=y_test)
 
-np.save(f'temp_plots/ff_oos', np.array(oos).ravel())
-np.save(f'temp_plots/ff_res_l', np.array(res_l).ravel())
-np.save(f'temp_plots/ff_res_k', np.array(res_k).ravel())
+# np.save(f'temp_plots/ff_oos', np.array(oos).ravel())
+# np.save(f'temp_plots/ff_res_l', np.array(res_l).ravel())
+# np.save(f'temp_plots/ff_res_k', np.array(res_k).ravel())
 
 sns.lineplot(x=res_k, y=oos)
 plt.show()
