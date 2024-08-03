@@ -51,7 +51,8 @@ def train_lasso_path(network,
                      L1_penalty = True,
                      X_test = None,
                      y_test = None,
-                     max_lambda = np.inf):
+                     max_lambda = np.inf,
+                     min_improvement = 0.99):
     
     minimized = False
     res_k = []
@@ -112,7 +113,7 @@ def train_lasso_path(network,
             train_time += perf_counter_ns() - start_train
 
             e_since_best_val += 1
-            if val_obj < best_val_obj:
+            if val_obj < best_val_obj * min_improvement:
                 best_val_obj = val_obj
                 best_weights = network.get_weights()
                 e_since_best_val = 1
