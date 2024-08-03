@@ -18,7 +18,7 @@ def main():
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 24)]
-    lag_opt = [(1, 24), (2, 24)]
+    lag_opt = [(2, 48)]
 
     K_opt = [
         [10],

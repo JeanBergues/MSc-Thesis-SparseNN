@@ -111,93 +111,21 @@ def main():
                     full_dense, cv_starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
                     train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
                     patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xtv, y_test=yv, max_lambda=cv_selected_lambda)
+            
+            np.save(f'{EXPERIMENT_NAME}_OOS', np.array(res_oos).ravel())
+            np.save(f'{EXPERIMENT_NAME}_K', np.array(res_k).ravel())
 
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
 
             test_f = final_net.predict(Xtestfull).ravel()
+            train_f = final_net.predict(Xtrainfull).ravel()
             test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
+            train_f = y_pp.inverse_transform(train_f.reshape(1, -1)).ravel()
+
             experiment_mse = mt.mean_squared_error(ytest, test_f)
-            np.save(f'{EXPERIMENT_NAME}_LASSONET_FORECAST', test_f.ravel())
+            np.save(f'{EXPERIMENT_NAME}_LN_FORECAST', test_f.ravel())
+            np.save(f'{EXPERIMENT_NAME}_LN_TRAIN_FORECAST', train_f.ravel())
             print(f"LASSONET MODEL ACHIEVED MSE: {experiment_mse}")
-            1/0
-
-            best_val_mse = np.inf
-            best_val_mse_sd = 0
-            best_K = DEFAULT_K
-
-            np.random.seed(1234)
-            tf.random.set_seed(1234)
-            ks.utils.set_random_seed(1234)
-
-            # Select final model based on small validation set
-            Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
-            yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
-            yvaltrain = y_pp.inverse_transform(ytrain.reshape(1, -1)).ravel()
-
-            best_final_val_mse = np.inf
-            best_final_mse = np.inf
-            best_test_mse = np.inf
-            best_test_return = -np.inf
-
-            # Robustness of final model
-            final_results = np.zeros(n_fm_reps)
-            for i in range(n_fm_reps):
-                if USE_SKIP:
-                    nn = return_MLP_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation=activation, epochs=20_000, patience=fm_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
-                else:
-                    nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation=activation, epochs=20_000, patience=fm_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
-
-                test_f = nn.predict(Xtest).ravel()
-                test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
-                experiment_mse = mt.mean_squared_error(ytest, test_f)
-                final_results[i] = experiment_mse
-
-                val_f = nn.predict(Xv).ravel()
-                val_f = y_pp.inverse_transform(val_f.reshape(1, -1)).ravel()
-                val_mse = mt.mean_squared_error(yval, val_f)
-
-                train_f = nn.predict(Xtrain).ravel()
-                train_f = y_pp.inverse_transform(train_f.reshape(1, -1)).ravel()
-                train_mse = mt.mean_squared_error(yvaltrain, train_f)
-
-                f_return = calc_investment_returns(val_f, yval, yvaltrain, allow_empty=True, trad_cost=0, use_thresholds=False)[0]
-
-                print(f"TEST MSE: {experiment_mse:.3f}")
-                print(f"VAL MSE: {val_mse:.3f}")
-                print(f"TRAIN MSE: {train_mse:.3f}")
-                print(f"RETURN: {f_return:.3f}")
-
-                if val_mse < best_final_val_mse:
-                    best_final_val_mse = val_mse
-                    best_final_mse = experiment_mse
-                    test_forecast = test_f
-                if experiment_mse < best_test_mse:
-                    best_test_mse = experiment_mse
-                    best_test_forecast = test_f
-                if f_return > best_test_return:
-                    best_test_return = f_return
-                    best_return_forecast = test_f
-
-            final_returns = calc_investment_returns(best_return_forecast, ytest, yvaltrain, allow_empty=True, trad_cost=0, use_thresholds=False)[0]
-            val_returns = calc_investment_returns(test_forecast, ytest, yvaltrain, allow_empty=True, trad_cost=0, use_thresholds=False)[0]
-            print("")
-            print("FINAL RESULTS")
-            print(f"AVERAGE TEST MSE = {np.mean(final_results):.3f}")
-            print(f"AVERAGE TEST SD = {np.std(final_results):.3f}")
-            print(f"VAL SELECTED MSE = {mt.mean_squared_error(ytest, test_forecast):.3f}")
-            print(f"BEST TEST MSE = {mt.mean_squared_error(ytest, best_test_forecast):.3f}")
-            print(f"RETURN OF BEST RETURNING MODEL = {final_returns:.3f}")
-            print(f"MSE OF BEST RETURNING MODEL = {mt.mean_squared_error(ytest, best_return_forecast):.3f}")
-            print(f"Only mean MSE = {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(yvaltrain))):.3f}")
-            
-            np.savetxt(f'{EXPERIMENT_NAME}_TEST_STATS', np.array([np.mean(final_results), np.std(final_results), best_final_mse, best_final_val_mse, best_test_mse, val_returns, final_returns]))
-            np.save(f'{EXPERIMENT_NAME}_FORECAST', test_forecast.ravel())
-            np.save(f'{EXPERIMENT_NAME}_TEST_FORECAST', best_test_forecast.ravel())
-            np.save(f'{EXPERIMENT_NAME}_RETURN_FORECAST', best_return_forecast.ravel())
-
-            if PLOT_FINAL_FORECASTS:
-                plot_returns(ytest, yvaltrain, forecasts=[test_forecast, best_test_forecast, best_return_forecast], names=["TEST", "VAL", "RETURN"], strat=False)
-                plot_returns(ytest, yvaltrain, forecasts=[test_forecast, best_test_forecast, best_return_forecast], names=["TEST", "VAL", "RETURN"], strat=True)
 
 if __name__ == '__main__':
     main()
