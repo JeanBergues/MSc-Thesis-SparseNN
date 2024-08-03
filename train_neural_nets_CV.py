@@ -18,7 +18,6 @@ def main():
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 24)]
-    lag_opt = [(2, 48)]
 
     K_opt = [
         [10],
@@ -29,7 +28,7 @@ def main():
         [100, 20]
     ]
     
-    USE_X = False
+    USE_X = True
     USE_SKIP = True
     VALIDATE_LAYER = True
     DEFAULT_K = []
