@@ -20,8 +20,8 @@ def main():
     dlag_opt = [1, 2]
     hlag_opt = [0, 1, 2, 3]
 
-    dlag_opt = [7]
-    hlag_opt = [24]
+    dlag_opt = [2]
+    hlag_opt = [0]
 
     K_opt = [
         [5],
@@ -31,10 +31,10 @@ def main():
         [50]
     ]
     
-    USE_X = False
+    USE_X = True
     USE_SKIP = True
     VALIDATE_LAYER = False
-    DEFAULT_K = [100]
+    DEFAULT_K = [50]
 
     activation      = 'relu'
     n_cv_reps       = 5
@@ -51,7 +51,7 @@ def main():
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
-    PLOT_FINAL_FORECASTS = True
+    LOAD_BACKUP = True
 
     # Begin the training
     for d_nlags in dlag_opt:
@@ -78,39 +78,43 @@ def main():
             full_dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
             cv_starting_lambda = estimate_starting_lambda(full_dense.get_layer('skip_layer').get_weights()[0], full_dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / learning_rate
 
-            val_mse_paths = []
-            val_lambda_paths = []
+            if not LOAD_BACKUP:
+                val_mse_paths = []
+                val_lambda_paths = []
 
-            for i, (train_index, test_index) in enumerate(tscv.split(Xtrainfull)):
-                Xt, Xv, yt, yv = Xtrainfull[train_index], Xtrainfull[test_index], ytrain[train_index], ytrain[test_index]
-                Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
-                #yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
+                for i, (train_index, test_index) in enumerate(tscv.split(Xtrainfull)):
+                    Xt, Xv, yt, yv = Xtrainfull[train_index], Xtrainfull[test_index], ytrain[train_index], ytrain[test_index]
+                    Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=30, shuffle=False)
+                    #yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-                dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
-                res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
-                    dense, cv_starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
-                    train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
-                    patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xtv, y_test=yv)
+                    dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
+                    res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
+                        dense, cv_starting_lambda, Xt, Xtv, yt, ytv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
+                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
+                        patience=5, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv)
 
-                val_mse_paths.append(res_oos)
-                val_lambda_paths.append(res_l)
-                np.save(f'{EXPERIMENT_NAME}_FOLD{i}', np.array(res_oos).ravel())
+                    val_mse_paths.append(res_oos)
+                    val_lambda_paths.append(res_l)
+                    np.save(f'{EXPERIMENT_NAME}_FOLD{i}', np.array(res_oos).ravel())
 
-            longest_path_length = max(map(len, val_mse_paths))
-            longest_lambda_path = max(val_lambda_paths, key=len)
-            cv_mses = np.array([path+[path[-1]]*(longest_path_length-len(path)) for path in val_mse_paths])
+                longest_path_length = max(map(len, val_mse_paths))
+                longest_lambda_path = max(val_lambda_paths, key=len)
+                cv_mses = np.array([path+[path[-1]]*(longest_path_length-len(path)) for path in val_mse_paths])
+                np.save(f'{EXPERIMENT_NAME}_ALLFOLDS', cv_mses)
+                np.save(f'{EXPERIMENT_NAME}_CV_LAMBDA', np.array(longest_lambda_path))
+            else:
+                cv_mses = np.load(f'{EXPERIMENT_NAME}_ALLFOLDS.npy')
+                longest_lambda_path = [cv_starting_lambda * 1.02 ** p for p in range(cv_mses.shape[1])]
+
             mean_cv_mse = np.mean(cv_mses, axis=0)
             cv_selected_lambda = longest_lambda_path[np.argmin(mean_cv_mse)]
-
-            np.save(f'{EXPERIMENT_NAME}_ALLFOLDS', cv_mses)
-            np.save(f'{EXPERIMENT_NAME}_CV_LAMBDA', longest_lambda_path.ravel())
-
+            
             Xt, Xv, yt, yv = ms.train_test_split(Xtrainfull, ytrain, test_size=30, shuffle=False)
             # mask = paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(DEFAULT_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', n_features=0, use_custom_optimizer=True)
             res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
                     full_dense, cv_starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
                     train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=100, use_best_weights=True,
-                    patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xtv, y_test=yv, max_lambda=cv_selected_lambda)
+                    patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv, max_lambda=cv_selected_lambda)
             
             np.save(f'{EXPERIMENT_NAME}_OOS', np.array(res_oos).ravel())
             np.save(f'{EXPERIMENT_NAME}_K', np.array(res_k).ravel())
