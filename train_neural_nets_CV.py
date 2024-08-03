@@ -18,7 +18,6 @@ def main():
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 24)]
-    # lag_opt = [(2, 48)]
 
     K_opt = [
         [10],
@@ -28,15 +27,8 @@ def main():
         [50, 10],
         [100, 20]
     ]
-
-    K_opt = [
-        [100],
-        [100, 20],
-        [200],
-        [200, 40]
-    ]
     
-    USE_X = False
+    USE_X = True
     USE_SKIP = True
     VALIDATE_LAYER = True
     DEFAULT_K = []
@@ -52,7 +44,7 @@ def main():
     use_l1_penalty  = False
     n_days_es       = 30
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/CVEX_"
+    BASE_EXPERIMENT_NAME = "final_forecasts/CV_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
 
