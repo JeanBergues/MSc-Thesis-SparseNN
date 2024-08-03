@@ -47,7 +47,7 @@ def main():
     use_l1_penalty  = False
     M = 10
 
-    EXPERIMENT_NAME = "final_forecasts/"
+    EXPERIMENT_NAME = "final_LN_forecasts/"
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
@@ -94,12 +94,16 @@ def main():
 
                 val_mse_paths.append(res_oos)
                 val_lambda_paths.append(res_l)
+                np.save(f'{EXPERIMENT_NAME}_FOLD{i}', np.array(res_oos).ravel())
 
             longest_path_length = max(map(len, val_mse_paths))
             longest_lambda_path = max(val_lambda_paths, key=len)
             cv_mses = np.array([path+[path[-1]]*(longest_path_length-len(path)) for path in val_mse_paths])
             mean_cv_mse = np.mean(cv_mses, axis=0)
             cv_selected_lambda = longest_lambda_path[np.argmin(mean_cv_mse)]
+
+            np.save(f'{EXPERIMENT_NAME}_ALLFOLDS', cv_mses)
+            np.save(f'{EXPERIMENT_NAME}_CV_LAMBDA', longest_lambda_path.ravel())
 
             Xt, Xv, yt, yv = ms.train_test_split(Xtrainfull, ytrain, test_size=30, shuffle=False)
             # mask = paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(DEFAULT_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', n_features=0, use_custom_optimizer=True)
