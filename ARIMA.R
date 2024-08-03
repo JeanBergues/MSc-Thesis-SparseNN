@@ -70,12 +70,16 @@ ytest <- day_test$close[(1 + 1):length(day_test$close)]
 
 am <- auto.arima(ytrain)
 print(summary(am))
-forecast <- fitted(Arima(ytest, model=am))
 
-write(forecast, file="final_R_forecasts/arima_day_test.txt")
+forecast <- fitted(Arima(ytest, model=am))
+write(forecast, file="final_R_forecasts/arima_day_test.txt", ncolumns=1)
+forecast <- fitted(Arima(ytrain, model=am))
+write(forecast, file="final_R_forecasts/arima_day_train.txt", ncolumns=1)
 
 am <- auto.arima(ytrain, xreg=day_trainX)
-forecast <- fitted(Arima(ytest, model=am, xreg=day_testX))
 print(summary(am))
 
-write(forecast, file="final_R_forecasts/arimaX_day_test.txt")
+forecast <- fitted(Arima(ytest, model=am, xreg=day_testX))
+write(forecast, file="final_R_forecasts/arimaX_day_test.txt", ncolumns=1)
+forecast <- fitted(Arima(ytrain, model=am, xreg=day_trainX))
+write(forecast, file="final_R_forecasts/arimaX_day_train.txt", ncolumns=1)

@@ -119,39 +119,29 @@ def main():
     print("Data has been fully loaded")
 
     best_model_test_np = [
-        'final_forecasts/NEW_SNN_1_24_FORECAST',
-        'final_forecasts/NEW_SNN_2_0_FORECAST',
         'final_forecasts/CV_SNN_1_0_FORECAST',
-        # 'final_forecasts/SNN_2_0_FORECAST',
-        # 'final_forecasts/NN_2_0_FORECAST',
-        # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
+        'final_forecasts/CV_SNN_2_0_FORECAST',
+        'final_forecasts/CV_SNN_1_24_FORECAST',
+        'final_forecasts/CV_SNN_2_48_FORECAST',
     ]
 
     best_model_train_np = [
-        'final_forecasts/NEW_SNN_1_24_TRAIN_FORECAST',
-        'final_forecasts/NEW_SNN_2_0_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_1_0_TRAIN_FORECAST',
-        # 'final_forecasts/SNN_2_0_FORECAST',
-        # 'final_forecasts/NN_2_0_FORECAST',
-        # 'final_forecasts/LN_SNN_7_24_LASSONET_FORECAST',
+        'final_forecasts/CV_SNN_2_0_TRAIN_FORECAST',
+        'final_forecasts/CV_SNN_1_24_TRAIN_FORECAST',
+        'final_forecasts/CV_SNN_2_48_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
         'final_R_forecasts/MIDAS_test',
-        # 'final_R_forecasts/MIDASX_test',
         'final_R_forecasts/garch_test',
-        'final_R_forecasts/garchX_test',
-        # 'final_R_forecasts/arima_day_test',
-        # 'final_R_forecasts/arimaX_day_test',
+        'final_R_forecasts/arima_day_test',
     ]
 
     best_model_train_txt = [
         'final_R_forecasts/MIDAS_train',
-        # 'final_R_forecasts/MIDASX_test',
         'final_R_forecasts/garch_train',
-        'final_R_forecasts/garch_train',
-        # 'final_R_forecasts/arima_day_test',
-        # 'final_R_forecasts/arimaX_day_test',
+        'final_R_forecasts/arima_day_train',
     ]
 
     paths_to_plot = {}
@@ -202,7 +192,7 @@ def main():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['SKIP(1, 24)', 'SKIP(2, 0)', 'CVSKIP(2, 0)', 'MIDAS', 'GARCH', 'GARCHX', 'Long', 'Short']
+    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))

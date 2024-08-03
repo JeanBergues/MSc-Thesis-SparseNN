@@ -135,7 +135,7 @@ estimate_midas_model <- function(Xt_day, Xv_day, Xt_hour, Xv_hour, hlag=1, mlag=
   return (list(mse=mse, r=rt, frc=midas_forecast$mean, co=co, model=midas_model))
 }
 
-try_hlags <- 1:24
+try_hlags <- 1:7
 try_mlags <- 0
 
 best_mse <- 1e10
@@ -178,7 +178,8 @@ full_mse <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, h
 full_ret <- estimate_midas_model(day_trainf, day_test, hour_trainf, hour_test, hlag=best_r_hlag, mlag=best_r_mlag, summ=FALSE)
 print(full_ret$co)
 
-write(full_mse$frc, file="final_R_forecasts/MIDASX_test.txt")
+write(full_mse$frc, file="final_R_forecasts/MIDASX_test.txt", ncolumns=1)
+write(full_mse$model$fitted.values, file="final_R_forecasts/MIDASX_train.txt", ncolumns=1)
 #write(full_ret$frc, file="txt_forecast/amidas_day_r_test.txt")
 
 print(summary(full_mse$model))
