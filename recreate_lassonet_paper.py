@@ -12,7 +12,10 @@ import tensorflow as tf
 from lassonet_implementation import return_LassoNet_results, paper_lassonet_results, estimate_starting_lambda, train_lasso_path
 from network_definitions import return_MLP_skip_classifier
 
-X_full, y_full = skdata.fetch_openml(name="miceprotein", return_X_y=True)
+dataset = "isolet"
+dataset = "miceprotein"
+n_classes = 8 if dataset == "miceprotein" else 26
+X_full, y_full = skdata.fetch_openml(name=dataset, return_X_y=True)
 print(X_full.shape)
 print("Loaded data.")
 
@@ -35,12 +38,12 @@ np.random.seed(1234)
 tf.random.set_seed(1234)
 ks.utils.set_random_seed(1234)
 
-# paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=0.99, n_iters=(5000, 10000))
-# paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
-# lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
-# plt.show()
+paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=0.99, n_iters=(5000, 100))
+paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
+lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
+plt.show()
 
-dense = return_MLP_skip_classifier(X_train, X_val, y_train, y_val, 8, K=[100], epochs=5000, verbose=1, lr=a, activation='relu')
+dense = return_MLP_skip_classifier(X_train, X_val, y_train, y_val, n_classes, K=[100], epochs=5000, verbose=1, lr=a, activation='relu')
 # starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / 0.001
 
 dense.compile(optimizer=ks.optimizers.SGD(learning_rate=a, momentum=0.9), loss=ks.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
