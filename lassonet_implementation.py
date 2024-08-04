@@ -150,7 +150,7 @@ def train_lasso_path(network,
                 network.save_weights('best_network.weights.h5')
                 minimized = True
         
-        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, MSE = {val_acc:.6f} \n\n")
+        print(f"--------------------------------------------------------------------- K = {k}, lambda = {l:.3f}, MSE = {val_acc:.6f}, TEST MSE = {test_acc if X_test is not None else 0:.6f} \n\n")
     
     if train_until_k > 0 or max_lambda != np.inf:
         network.save('best_network.keras')
@@ -198,22 +198,22 @@ def hier_prox(theta: np.ndarray, W: np.ndarray, l: float, M: float, stable=True)
     return (theta_out, W_out)
 
 
-def paper_lassonet_results(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto", use_custom_optimizer=False, regressor=True):
+def paper_lassonet_results(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patiences=(100, 10), max_iters=(1000, 100), l_start="auto", use_custom_optimizer=False, regressor=True, tol=0.99):
     import lassonet as lsn
     from functools import partial
     import torch as pt
     if regressor:
         if use_custom_optimizer:
             lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M,
-                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=1,
+                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=tol,
                                         optim=(partial(pt.optim.Adam, lr=0.01), partial(pt.optim.SGD, lr=0.01, momentum=0.3)))
         else:
             lassoC = lsn.LassoNetRegressor(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M,
-                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=1)
+                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=tol)
             
     else:
        lassoC = lsn.LassoNetClassifier(verbose=verbose, hidden_dims=K, path_multiplier=(1+pm), M=M,
-                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=1) 
+                                        patience=patiences, n_iters=max_iters, random_state=1234, torch_seed=1234, lambda_start=l_start, backtrack=True, tol=tol) 
     history = lassoC.path(Xt, yt, X_val=Xv, y_val=yv)
 
     res_k = np.zeros(len(history))
@@ -269,14 +269,14 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
 
 def return_LassoNet_results(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), 
                             print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, mom=0.9, faster_fit=True, steps_back = 3, best_weights=True, regression=True,
-                            Xtest = None, ytest=None):
+                            Xtest = None, ytest=None, max_lambda=np.inf, min_improvement = 0.99):
     if starting_lambda == None:
         starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, steps_back=steps_back) / a
 
     res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=mom), ks.losses.MeanSquaredError() if regression else ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
         train_until_k=0, use_faster_fit=faster_fit, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=best_weights,
-        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression, X_test=Xtest, y_test=ytest)
+        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression, X_test=Xtest, y_test=ytest, max_lambda=max_lambda, min_improvement=min_improvement)
 
     return (res_k, res_theta, res_val, res_l, res_oos)
 

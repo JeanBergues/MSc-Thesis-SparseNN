@@ -45,7 +45,7 @@ freq = 24
 dlag_opt = [7]
 use_hlag = [24]
 
-best_K = [50]
+best_K = [30]
 
 USE_X = False
 USE_PAPER_LASSONET = False
@@ -74,13 +74,12 @@ for d_nlags in dlag_opt:
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
 
         # Run for M variations
-        HP_opts = [20]
+        HP_opts = [10]
         HP_results = []
-        EXPERIMENT_NAME = "NEW_CRIT_M_K10"
-
+        EXPERIMENT_NAME = "NEW_CRIT_TEST_M_K100-20"
         
         if not USE_PAPER_LASSONET:
-            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='relu', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
+            initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='tanh', K=best_K, verbose=1, patience=100, epochs=1000, drop=0, lr=0.01)
             initial_model.save('temp_network.keras')
             initial_model_best_weights = initial_model.get_weights()
             initial_model.save_weights('temp_weights.weights.h5')
@@ -93,14 +92,14 @@ for d_nlags in dlag_opt:
 
             if USE_PAPER_LASSONET:
                 res_k, _, res_val, res_l = paper_lassonet_results( 
-                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=hp, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', use_custom_optimizer=True)
+                    Xt, Xv, yt, yv, K=tuple(best_K), verbose=2, pm=0.02, M=hp, patiences=(100, 10), max_iters=(10000, 1000), l_start='auto', use_custom_optimizer=True)
             else:
                 network = ks.models.load_model('temp_network.keras')
                 network.set_weights(initial_model_best_weights)
                 network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
-                res_k, _, res_val, res_l, res_oos, final_net = return_LassoNet_results(
-                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 1000), print_path=True, print_lambda=True, starting_lambda=None, a=0.01, Xtest=Xtest, ytest=ytest)
+                res_k, _, res_val, res_l, res_oos = return_LassoNet_results(
+                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 100), print_path=True, print_lambda=True, starting_lambda=None, a=0.01, Xtest=Xtest, ytest=ytest, min_improvement=0.99, steps_back=2)
                 # res_k, res_val, res_l = return_LassoNet_mask(
                 #     initial_model, tXt, tXv, tyt, tyv, K=best_K, pm=hp, M=10, patiences=(100, 10), max_iters=(10000, 1000), print_path=True, print_lambda=True, starting_lambda=13)
             

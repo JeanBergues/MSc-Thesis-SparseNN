@@ -123,6 +123,7 @@ def main():
         'final_forecasts/CV_SNN_2_0_FORECAST',
         'final_forecasts/CV_SNN_1_24_FORECAST',
         'final_forecasts/CV_SNN_2_48_FORECAST',
+        'final_LN_forecasts/DLN_SNN_7_24_LN_FORECAST',
     ]
 
     best_model_train_np = [
@@ -130,6 +131,7 @@ def main():
         'final_forecasts/CV_SNN_2_0_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_1_24_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_2_48_TRAIN_FORECAST',
+        'final_LN_forecasts/DLN_SNN_7_24_LN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
@@ -192,7 +194,7 @@ def main():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
+    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))
