@@ -17,24 +17,12 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1, 2]
-    hlag_opt = [0, 1, 2, 3]
+    dlag_opt = [1]
+    hlag_opt = [24]
 
-    dlag_opt = [2]
-    hlag_opt = [48]
-
-    K_opt = [
-        [5],
-        [10],
-        [20],
-        [30],
-        [50]
-    ]
-    
-    USE_X = True
+    USE_X = False
     USE_SKIP = True
-    VALIDATE_LAYER = False
-    DEFAULT_K = [100, 20]
+    DEFAULT_K = [50]
 
     activation      = 'tanh'
     n_cv_reps       = 5
@@ -42,7 +30,7 @@ def main():
     n_fm_reps       = 5
     fm_patience     = 100
     learning_rate   = 0.01
-    es_lassonet_tol = 0.999
+    es_lassonet_tol = 0.99
     es_tolerance    = 0
     dropout         = 0
     use_l1_penalty  = False
@@ -52,7 +40,7 @@ def main():
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
-    LOAD_BACKUP = True
+    LOAD_BACKUP = False
 
     # Begin the training
     for d_nlags in dlag_opt:
@@ -77,7 +65,7 @@ def main():
             tscv = ms.TimeSeriesSplit(n_cv_reps)
             Xtt, Xtv, ytt, ytv = ms.train_test_split(Xtrainfull, ytrain, test_size=30, shuffle=False)
             full_dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
-            cv_starting_lambda = estimate_starting_lambda(full_dense.get_layer('skip_layer').get_weights()[0], full_dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / learning_rate
+            cv_starting_lambda = estimate_starting_lambda(full_dense.get_layer('skip_layer').get_weights()[0], full_dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=2) / learning_rate
 
             if not LOAD_BACKUP:
                 val_mse_paths = []
@@ -91,7 +79,7 @@ def main():
                     dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                     res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
                         dense, cv_starting_lambda, Xt, Xtv, yt, ytv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
-                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=1000, use_best_weights=True,
+                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.005, max_epochs_per_lambda=1000, use_best_weights=True,
                         patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv, min_improvement=es_lassonet_tol)
 
                     val_mse_paths.append(res_oos)

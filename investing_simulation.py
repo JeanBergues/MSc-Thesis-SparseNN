@@ -123,7 +123,7 @@ def main():
         'final_forecasts/CV_SNN_2_0_FORECAST',
         'final_forecasts/CV_SNN_1_24_FORECAST',
         'final_forecasts/CV_SNN_2_48_FORECAST',
-        'final_LN_forecasts/DLN_SNN_7_24_LN_FORECAST',
+        'final_LN_forecasts/LN_SNN_2_48_LN_FORECAST',
     ]
 
     best_model_train_np = [
@@ -131,7 +131,7 @@ def main():
         'final_forecasts/CV_SNN_2_0_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_1_24_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_2_48_TRAIN_FORECAST',
-        'final_LN_forecasts/DLN_SNN_7_24_LN_TRAIN_FORECAST',
+        'final_LN_forecasts/LN_SNN_2_48_LN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
