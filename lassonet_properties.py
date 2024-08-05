@@ -16,7 +16,7 @@ from data_loader import load_AR_data, load_data_with_X, scale_data
 from lassonet_implementation import return_LassoNet_results, paper_lassonet_results
 from network_definitions import return_MLP_skip_estimator
 
-def results_plot(HP_opts, HP_results, use=(0, 1), title=r"$B$", name="", show=True):
+def results_plot(HP_opts, HP_results, use=(0, 1), title=r"$B$", name="", show=True, log_scale=False):
     fig = plt.figure(figsize=(6, 3))
     labels = ["selected features", "MSE", r"$\lambda$"]
     for m, res in zip(HP_opts, HP_results):
@@ -27,6 +27,7 @@ def results_plot(HP_opts, HP_results, use=(0, 1), title=r"$B$", name="", show=Tr
         t.set_text(title + f"={l}")
 
     sns.move_legend(fig, "upper left", bbox_to_anchor=(1, 1))
+    if log_scale: plt.xscale('log')
     plt.xlabel(labels[use[0]])
     plt.ylabel(labels[use[1]])
     if show:
@@ -107,5 +108,5 @@ for d_nlags in dlag_opt:
 
         # Plot selected features against mse
         results_plot(HP_opts, HP_results, use=(0, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_KMSE", show=SHOW)
-        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$M$", name=f"{EXPERIMENT_NAME}_LK", show=SHOW)
-        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_LMSE", show=SHOW)
+        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$M$", name=f"{EXPERIMENT_NAME}_LK", show=SHOW, log_scale=True)
+        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_LMSE", show=SHOW, log_scale=True)

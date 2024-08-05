@@ -17,12 +17,12 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1]
-    hlag_opt = [24]
+    dlag_opt = [2]
+    hlag_opt = [0]
 
-    USE_X = False
+    USE_X = True
     USE_SKIP = True
-    DEFAULT_K = [50]
+    DEFAULT_K = [99]
 
     activation      = 'tanh'
     n_cv_reps       = 5
@@ -34,10 +34,11 @@ def main():
     es_tolerance    = 0
     dropout         = 0
     use_l1_penalty  = False
-    M = 10
+    M = 5
 
     EXPERIMENT_NAME = "final_LN_forecasts/"
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
+    EXPERIMENT_NAME += f"{DEFAULT_K}_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
     LOAD_BACKUP = False
@@ -79,7 +80,7 @@ def main():
                     dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                     res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
                         dense, cv_starting_lambda, Xt, Xtv, yt, ytv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
-                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.005, max_epochs_per_lambda=1000, use_best_weights=True,
+                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=1000, use_best_weights=True,
                         patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv, min_improvement=es_lassonet_tol)
 
                     val_mse_paths.append(res_oos)
