@@ -18,7 +18,7 @@ def main():
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 48)]
-    lag_opt = [(2, 48)]
+    lag_opt = [(1, 24)]
 
     K_opt = [
         [10],
@@ -28,26 +28,31 @@ def main():
         [50, 10],
         [100, 20]
     ]
+
+    K_opt = [
+        [50],
+    ]
     
-    USE_X = True
+    USE_X = False
     USE_SKIP = True
-    VALIDATE_LAYER = True
-    DEFAULT_K = []
+    VALIDATE_LAYER = False
+    DEFAULT_K = [10]
 
     activation      = 'tanh'
     n_cv_reps       = 5
     cv_patience     = 100
-    n_fm_reps       = 10
+    n_fm_reps       = 5
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
-    dropout         = 0
+    dropout         = 0.25
     use_l1_penalty  = False
     n_days_es       = 30
 
     BASE_EXPERIMENT_NAME = "final_forecasts/CV_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
+    BASE_EXPERIMENT_NAME += f"D{dropout:.2f}_" if dropout > 0 else ""
 
     PLOT_FINAL_FORECASTS = False
 

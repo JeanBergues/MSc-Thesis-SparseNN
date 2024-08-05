@@ -42,12 +42,12 @@ hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
 freq = 24
 
-dlag_opt = [7]
-use_hlag = [24]
+dlag_opt = [2]
+use_hlag = [0]
 
-best_K = [30]
+best_K = [100]
 
-USE_X = False
+USE_X = True
 USE_PAPER_LASSONET = False
 SHOW = True
 
