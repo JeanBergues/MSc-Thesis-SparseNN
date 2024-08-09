@@ -17,6 +17,7 @@ def calc_investment_returns_with_Sharpe(forecast_train, forecast, real, vol_trai
     prev_pos = 1 * np.sign(forecast[0])
 
     train_sharp_ratios = forecast_train / np.sqrt(vol_train[-len(forecast_train):])
+    # train_sharp_ratios = forecast_train / vol_train[-len(forecast_train):]
     uqtl = np.quantile(train_sharp_ratios, 1-alpha) if use_quantiles else 0
     lqtl = np.quantile(train_sharp_ratios, alpha) if use_quantiles else 0
 
@@ -123,7 +124,8 @@ def main():
         'final_forecasts/CV_SNN_2_0_FORECAST',
         'final_forecasts/CV_SNN_1_24_FORECAST',
         'final_forecasts/CV_SNN_2_48_FORECAST',
-        'final_LN_forecasts/LN_SNN_2_48_LN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[50]_2_12_LN_FORECAST',
+        'final_LN_forecasts/BWLN_SNN_[100, 20]_2_48_ALN_FORECAST',
     ]
 
     best_model_train_np = [
@@ -131,7 +133,8 @@ def main():
         'final_forecasts/CV_SNN_2_0_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_1_24_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_2_48_TRAIN_FORECAST',
-        'final_LN_forecasts/LN_SNN_2_48_LN_TRAIN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[50]_2_12_LN_TRAIN_FORECAST',
+        'final_LN_forecasts/BWLN_SNN_[100, 20]_2_48_ALN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
@@ -194,7 +197,7 @@ def main():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
+    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'Small LassoNet', 'Large LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))

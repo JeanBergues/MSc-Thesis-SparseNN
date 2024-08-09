@@ -6,19 +6,20 @@ import sklearn.model_selection as ms
 import sklearn.metrics as mt
 
 from network_definitions import return_MLP_estimator, return_MLP_skip_estimator
-from data_loader import load_AR_data, load_data_with_X, scale_data
+from data_loader import load_AR_data, load_data_with_X, scale_data, load_data_with_XLOG
 from investing_simulation import plot_returns, calc_investment_returns
 
 ###############################################################################################################################################################################################
 
 def main():
-    day_df = pd.read_csv(f'pct_btc_day.csv')
-    hour_df = pd.read_csv(f'pct_btc_hour.csv')
+    USE_LOG = False
+    day_df = pd.read_csv(f'com_btc_day.csv') if USE_LOG else pd.read_csv(f'pct_btc_day.csv')
+    hour_df = pd.read_csv(f'com_btc_hour.csv') if USE_LOG else pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 48)]
-    lag_opt = [(1, 24)]
+    lag_opt = [(1, 0)]
 
     K_opt = [
         [10],
@@ -28,15 +29,12 @@ def main():
         [50, 10],
         [100, 20]
     ]
-
-    K_opt = [
-        [50],
-    ]
     
-    USE_X = False
+    USE_X = True
     USE_SKIP = True
     VALIDATE_LAYER = False
-    DEFAULT_K = [10]
+    MASK = None
+    DEFAULT_K = [100, 30, 10]
 
     activation      = 'tanh'
     n_cv_reps       = 5
@@ -45,16 +43,18 @@ def main():
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
-    dropout         = 0.25
+    dropout         = 0
     use_l1_penalty  = False
     n_days_es       = 30
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/CV_"
+    BASE_EXPERIMENT_NAME = "final_forecasts/CVA_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
+    BASE_EXPERIMENT_NAME += "LOG_" if USE_LOG else ""
     BASE_EXPERIMENT_NAME += f"D{dropout:.2f}_" if dropout > 0 else ""
+    BASE_EXPERIMENT_NAME += f"MASKED_" if MASK is not None else ""
 
-    PLOT_FINAL_FORECASTS = False
+    PLOT_FINAL_FORECASTS = True
 
     # Begin the training
     for d_nlags, h_nlags in lag_opt:
@@ -65,12 +65,18 @@ def main():
         print(f"STARTING {EXPERIMENT_NAME}")
 
         if USE_X:
-            X_raw, y_raw = load_data_with_X(day_df, hour_df, d_nlags, h_nlags)
+            if USE_LOG:
+                X_raw, y_raw = load_data_with_XLOG(day_df, hour_df, d_nlags, h_nlags)
+            else:
+                X_raw, y_raw = load_data_with_X(day_df, hour_df, d_nlags, h_nlags)
         else:
             X_raw, y_raw = load_AR_data(day_df, hour_df, d_nlags, h_nlags)
         X_scaled, y_scaled, X_pp, y_pp = scale_data(X_raw, y_raw)
 
         Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X_scaled, y_scaled, test_size=365, shuffle=False)
+        if MASK is not None:
+            Xtrain = Xtrain[:,MASK]
+            Xtest = Xtest[:,MASK]
         print("Data has been fully transformed and split")
 
         ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()

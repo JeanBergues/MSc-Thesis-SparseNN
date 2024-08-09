@@ -55,11 +55,11 @@ best_q <- 0
 best_a <- 0
 best_b <- 0
 
-try_p <- 1
+try_p <- 1:2
 try_o <- 1
-try_q <- 1
-try_a <- 3:4
-try_b <- 3:4
+try_q <- 1:2
+try_a <- 1:2
+try_b <- 0
 
 estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE, type='gjrGARCH') {
   spec <- ugarchspec(
@@ -71,8 +71,7 @@ estimate_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE, type='gjrGAR
   model <- ugarchfit(
     data=yt,
     out.sample = length(yv),
-    spec=spec,
-    ex
+    spec=spec
   )
   
   if (summ) {print(model)}
@@ -102,13 +101,13 @@ estimate_rolling_garch_model <- function(yt, yv, p, o, q, a, b, summ=FALSE) {
   return (list(r=r, mse=mse, forc=forc, fit=roll, fullf=roll@forecast))
 }
 
-if(FALSE) {
+if(TRUE) {
   for (p in try_p) {
     for (o in try_o) {
       for (q in try_q) {
         for (a in try_a) {
           for (b in try_b) {
-            #result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
+            result <- estimate_garch_model(rtf, rva, p, o, q, a, b)
             
             if (result$mse < best_mse) {
               best_mse <- result$mse
@@ -129,8 +128,8 @@ if(FALSE) {
 
 
 # Compare against predicting mean
-#fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
-fm <- estimate_garch_model(rdf, rts, 1, 1, 1, 1, 0, summ=TRUE, type='gjrGARCH')
+fm <- estimate_garch_model(rdf, rts, best_p, best_o, best_q, best_a, best_b, summ=TRUE)
+#fm <- estimate_garch_model(rdf, rts, 2, 1, 1, 2, 0, summ=TRUE, type='gjrGARCH')
 #rm <- estimate_rolling_garch_model(rdf, rts, 1, 1, 1, 1, 0, summ=TRUE)
 
 print((1/split) * sum((rts - fm$forc)^2))
@@ -152,7 +151,7 @@ plot(holding_dev, type='l', col='black', ylim=c(min(budget_mse_dev, holding_dev,
 lines(budget_mse_dev, type='l', col='red')
 lines(shorting_dev, type='l', col='blue')
 
-write(fm$forc, file="final_R_forecasts/garchX_test.txt", ncolumns=1)
+#write(fm$forc, file="final_R_forecasts/garchX_test.txt", ncolumns=1)
 #write(fm$vol, file="final_R_forecasts/garchX_vol.txt", ncolumns=1)
 #write(rm$fullf$density$Mu, file="final_R_forecasts/roll_garchX_test.txt", ncolumns=1)
 #write(rm$fullf$density$Sigma, file="final_R_forecasts/roll_garchX_vol.txt", ncolumns=1)

@@ -17,8 +17,6 @@ def main():
     hour_df = pd.read_csv(f'pct_btc_hour.csv')
 
     # Define the experiment parameters
-    dlag_opt = [1, 2]
-    hlag_opt = [0, 1, 2, 3]
 
     dlag_opt = [7]
     hlag_opt = [0]
@@ -45,7 +43,7 @@ def main():
             Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X_scaled, y_scaled, test_size=365, shuffle=False)
             print("Data has been fully transformed and split")
 
-            lm = sklm.LassoCV(cv=ms.TimeSeriesSplit(10, test_size=120), verbose=1, fit_intercept=True, max_iter=100_000, n_jobs=-1)
+            lm = sklm.LassoCV(cv=ms.TimeSeriesSplit(5), verbose=1, fit_intercept=True, max_iter=100_000, n_jobs=-1)
             lm.fit(Xtrain, ytrain)
 
             lasso_mask = np.ravel(lm.coef_ != 0)
@@ -57,9 +55,13 @@ def main():
             test_forecast = y_pp.inverse_transform(test_forecast.reshape(1, -1)).ravel()
             ytest = y_pp.inverse_transform(ytest.reshape(1, -1)).ravel()
             ytrain = y_pp.inverse_transform(ytrain.reshape(1, -1)).ravel()
-            
+
             print(f"BEST TEST MSE = {mt.mean_squared_error(ytest, test_forecast):.3f}")
             print(f"Only mean MSE = {mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
+
+            Xtrain = Xtrain[:,lasso_mask]
+            Xtest = Xtest[:,lasso_mask]
+            
 
 if __name__ == '__main__':
     main()

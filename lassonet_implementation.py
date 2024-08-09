@@ -52,7 +52,8 @@ def train_lasso_path(network,
                      X_test = None,
                      y_test = None,
                      max_lambda = np.inf,
-                     min_improvement = 0.99):
+                     min_improvement = 0.99,
+                     sparse_to_dense = False):
     
     minimized = False
     res_k = []
@@ -61,9 +62,10 @@ def train_lasso_path(network,
     res_l = []
     res_oos = []
     l = starting_lambda / (1 + pm)
-    k = X_train.shape[1]
+    k = 0 if sparse_to_dense else X_train.shape[1]
+    all_k = X_train.shape[1]
 
-    while k > train_until_k and l < max_lambda:
+    while (k < all_k) if sparse_to_dense else (k > train_until_k and l <= max_lambda ):
         l = (1 + pm) * l
         res_l.append(l)
         best_val_obj = np.inf
@@ -269,14 +271,14 @@ def paper_lassonet_mask(Xt, Xv, yt, yv, K=(10,), verbose=0, pm=0.02, M=10, patie
 
 def return_LassoNet_results(dense, Xt, Xv, yt, yv, pm=0.02, activation='relu', M=10, max_iters=(1000, 100), patiences=(100, 10), 
                             print_lambda=False, print_path=False, a=1e-3, starting_lambda=None, mom=0.9, faster_fit=True, steps_back = 3, best_weights=True, regression=True,
-                            Xtest = None, ytest=None, max_lambda=np.inf, min_improvement = 0.99):
+                            Xtest = None, ytest=None, max_lambda=np.inf, min_improvement = 0.99, sparse_to_dense = False):
     if starting_lambda == None:
         starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=print_lambda, steps_back=steps_back) / a
 
     res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
         dense, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=a, momentum=mom), ks.losses.MeanSquaredError() if regression else ks.losses.SparseCategoricalCrossentropy(from_logits=True), 
         train_until_k=0, use_faster_fit=faster_fit, lr=a, M=M, pm=pm, max_epochs_per_lambda=max_iters[1], use_best_weights=best_weights,
-        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression, X_test=Xtest, y_test=ytest, max_lambda=max_lambda, min_improvement=min_improvement)
+        patience=patiences[1], verbose=print_path, use_faster_eval=False, regressor=regression, X_test=Xtest, y_test=ytest, max_lambda=max_lambda, min_improvement=min_improvement, sparse_to_dense=sparse_to_dense)
 
     return (res_k, res_theta, res_val, res_l, res_oos)
 

@@ -35,13 +35,13 @@ def return_MLP_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs=20_0
     return nn
 
 
-def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs=20_000, patience=100, verbose=0, drop=0, use_L1=False, es_tol=0, lr=1e-1):
+def return_MLP_skip_estimator(Xt, Xv, yt, yv, K=[100], activation='relu', epochs=20_000, patience=100, verbose=0, drop=0, use_L1=False, es_tol=0, lr=1e-1, skip_bias=False):
     inp = ks.layers.Input(shape=(Xt.shape[1],))
 
     if use_L1:
-        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=skip_bias, kernel_regularizer=ks.regularizers.L1(), name='skip_layer')(inp)
     else:
-        skip = ks.layers.Dense(units=1, activation='linear', use_bias=False, name='skip_layer')(inp)
+        skip = ks.layers.Dense(units=1, activation='linear', use_bias=skip_bias, name='skip_layer')(inp)
 
     gw = ks.layers.Dropout(drop)(inp)
     gw = ks.layers.Dense(units=K[0], activation=activation, name='gw_layer')(inp)

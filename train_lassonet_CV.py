@@ -18,11 +18,11 @@ def main():
 
     # Define the experiment parameters
     dlag_opt = [2]
-    hlag_opt = [0]
+    hlag_opt = [48]
 
-    USE_X = True
+    USE_X = False
     USE_SKIP = True
-    DEFAULT_K = [99]
+    DEFAULT_K = [100, 20]
 
     activation      = 'tanh'
     n_cv_reps       = 5
@@ -33,15 +33,17 @@ def main():
     es_lassonet_tol = 0.99
     es_tolerance    = 0
     dropout         = 0
+    path_multiplier = 0.01
+    B               = 1000
+    M               = 10
     use_l1_penalty  = False
-    M = 5
-
-    EXPERIMENT_NAME = "final_LN_forecasts/"
+    
+    EXPERIMENT_NAME = "final_LN_forecasts/BW"
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
     EXPERIMENT_NAME += f"{DEFAULT_K}_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
-    LOAD_BACKUP = False
+    LOAD_BACKUP = True
 
     # Begin the training
     for d_nlags in dlag_opt:
@@ -80,7 +82,7 @@ def main():
                     dense = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=DEFAULT_K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                     res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
                         dense, cv_starting_lambda, Xt, Xtv, yt, ytv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
-                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=1000, use_best_weights=True,
+                        train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=path_multiplier, max_epochs_per_lambda=B, use_best_weights=False,
                         patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv, min_improvement=es_lassonet_tol)
 
                     val_mse_paths.append(res_oos)
@@ -94,7 +96,8 @@ def main():
                 np.save(f'{EXPERIMENT_NAME}_CV_LAMBDA', np.array(longest_lambda_path))
             else:
                 cv_mses = np.load(f'{EXPERIMENT_NAME}_ALLFOLDS.npy')
-                longest_lambda_path = [cv_starting_lambda * 1.02 ** p for p in range(cv_mses.shape[1])]
+                #longest_lambda_path = [cv_starting_lambda * (1 + path_multiplier) ** p for p in range(cv_mses.shape[1])]
+                longest_lambda_path = np.load(f'{EXPERIMENT_NAME}_CV_LAMBDA.npy')
 
             mean_cv_mse = np.mean(cv_mses, axis=0)
             cv_selected_lambda = longest_lambda_path[np.argmin(mean_cv_mse)]
@@ -103,7 +106,7 @@ def main():
             # mask = paper_lassonet_mask(Xt, Xv, yt, yv, K=tuple(DEFAULT_K), verbose=2, pm=0.02, M=20, patiences=(100, 10), max_iters=(10000, 100), l_start='auto', n_features=0, use_custom_optimizer=True)
             res_k, res_theta, res_val, res_l, res_oos, final_net = train_lasso_path(
                     full_dense, cv_starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=learning_rate, momentum=0.9), ks.losses.MeanSquaredError(), 
-                    train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=0.02, max_epochs_per_lambda=1000, use_best_weights=True,
+                    train_until_k=0, use_faster_fit=True, lr=learning_rate, M=M, pm=path_multiplier, max_epochs_per_lambda=B, use_best_weights=False,
                     patience=10, verbose=True, use_faster_eval=False, regressor=True, X_test=Xv, y_test=yv, max_lambda=cv_selected_lambda, min_improvement=es_lassonet_tol)
             
             np.save(f'{EXPERIMENT_NAME}_OOS', np.array(res_oos).ravel())
@@ -117,8 +120,8 @@ def main():
             train_f = y_pp.inverse_transform(train_f.reshape(1, -1)).ravel()
 
             experiment_mse = mt.mean_squared_error(ytest, test_f)
-            np.save(f'{EXPERIMENT_NAME}_LN_FORECAST', test_f.ravel())
-            np.save(f'{EXPERIMENT_NAME}_LN_TRAIN_FORECAST', train_f.ravel())
+            np.save(f'{EXPERIMENT_NAME}_ALN_FORECAST', test_f.ravel())
+            np.save(f'{EXPERIMENT_NAME}_ALN_TRAIN_FORECAST', train_f.ravel())
             print(f"LASSONET MODEL ACHIEVED MSE: {experiment_mse}")
 
 if __name__ == '__main__':

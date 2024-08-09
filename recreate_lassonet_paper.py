@@ -12,9 +12,9 @@ import tensorflow as tf
 from lassonet_implementation import return_LassoNet_results, paper_lassonet_results, estimate_starting_lambda, train_lasso_path
 from network_definitions import return_MLP_skip_classifier
 
-CALCULATE = False
+CALCULATE = True
 dataset = "isolet"
-# dataset = "miceprotein"
+dataset = "miceprotein"
 
 if CALCULATE:
     n_classes = 8 if dataset == "miceprotein" else 26
@@ -32,7 +32,7 @@ if CALCULATE:
     X_train, X_val, y_train, y_val = train_test_split(X_ftrain, y_ftrain, test_size=0.1, random_state=2345)
     print("Split data.")
 
-    K = 300
+    K = 100 if dataset == "miceprotein" else 300
     M = 10
     pm= 0.02
     a = 0.001
@@ -41,12 +41,12 @@ if CALCULATE:
     tf.random.set_seed(1234)
     ks.utils.set_random_seed(1234)
 
-    paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=0.99, n_iters=(5000, 100))
-    paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
-    lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
-    plt.savefig(f'plots/paper_{dataset}.eps', format='eps', bbox_inches='tight')
-    lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
-    plt.savefig(f'plots/paper_{dataset}.png', format='png', bbox_inches='tight')
+    # paper_LN = lsn.LassoNetClassifier(verbose=2, hidden_dims=(K,), path_multiplier=(1+pm), M=M, random_state=1234, torch_seed=1234, lambda_start=6, backtrack=True, tol=0.99, n_iters=(5000, 100))
+    # paper_LN_path = paper_LN.path(X_train, y_train, X_val=X_val, y_val=y_val, return_state_dicts=True)
+    # lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
+    # plt.savefig(f'plots/paper_{dataset}.eps', format='eps', bbox_inches='tight')
+    # lsn.plot_path(paper_LN, paper_LN_path, X_test=X_test, y_test=y_test)
+    # plt.savefig(f'plots/paper_{dataset}.png', format='png', bbox_inches='tight')
 
     dense = return_MLP_skip_classifier(X_train, X_val, y_train, y_val, n_classes, K=[K], epochs=5000, verbose=1, lr=a, activation='relu')
     # starting_lambda = estimate_starting_lambda(dense.get_layer('skip_layer').get_weights()[0], dense.get_layer('gw_layer').get_weights()[0], M, verbose=True, steps_back=3) / 0.001
@@ -58,9 +58,9 @@ if CALCULATE:
         train_until_k=0, use_faster_fit=True, lr=a, M=M, pm=pm, max_epochs_per_lambda=100, use_best_weights=True,
         patience=10, verbose=True, use_faster_eval=False, regressor=False, X_test=X_test, y_test=y_test, min_improvement=0.99)
 
-    np.save(f'paper_reproduction/{dataset}_oos', np.array(oos).ravel())
-    np.save(f'paper_reproduction/{dataset}_res_l', np.array(res_l).ravel())
-    np.save(f'paper_reproduction/{dataset}_res_k', np.array(res_k).ravel())
+    # np.save(f'paper_reproduction/{dataset}_oos', np.array(oos).ravel())
+    # np.save(f'paper_reproduction/{dataset}_res_l', np.array(res_l).ravel())
+    # np.save(f'paper_reproduction/{dataset}_res_k', np.array(res_k).ravel())
 
 else:
     oos = np.load(f'paper_reproduction/{dataset}_oos.npy')

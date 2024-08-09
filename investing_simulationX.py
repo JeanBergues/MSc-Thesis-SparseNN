@@ -123,7 +123,8 @@ def main():
         'final_forecasts/CV_SNN_X_2_0_FORECAST',
         'final_forecasts/CV_SNN_X_1_24_FORECAST',
         'final_forecasts/CV_SNN_X_2_24_FORECAST',
-        'final_LN_forecasts/LN_SNN_[100]X_2_0_LN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[50]_X_2_0_LN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[100, 20]_X_2_48_LN_FORECAST',
     ]
 
     best_model_train_np = [
@@ -131,7 +132,8 @@ def main():
         'final_forecasts/CV_SNN_X_2_0_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_X_1_24_TRAIN_FORECAST',
         'final_forecasts/CV_SNN_X_2_24_TRAIN_FORECAST',
-        'final_LN_forecasts/LN_SNN_[100]X_2_0_LN_TRAIN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[50]_X_2_0_LN_TRAIN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[100, 20]_X_2_48_LN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
@@ -148,11 +150,11 @@ def main():
 
     paths_to_plot = {}
     series_to_test = {}
-    WITH_SHARPE = False
+    WITH_SHARPE = True
     USE_QUANTILES = True
 
     train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytrain)
-    test_vol = np.loadtxt(f'final_R_forecasts/roll_garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
+    test_vol = np.loadtxt(f'final_R_forecasts/garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
 
     for mtest, mtrain in zip(best_model_test_np, best_model_train_np):
         fc = np.load(f'{mtest}.npy').ravel()[-365:]
@@ -194,7 +196,7 @@ def main():
     #     print(k)
     #     print(dm.dm_test(ytest, benchmark, v))
 
-    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
+    leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'Small LassoNet', 'Large LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
     x_axis = list(range(len(ytest.ravel())))
     fig = plt.figure(figsize=(16, 6))
