@@ -51,6 +51,7 @@ best_K = [100, 20]
 USE_X = True
 USE_PAPER_LASSONET = False
 SHOW = True
+changing_hp = r"$\epsilon$"
 
 for d_nlags in dlag_opt:
     for h_nlags in use_hlag:
@@ -75,9 +76,9 @@ for d_nlags in dlag_opt:
         Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=30, shuffle=False)
 
         # Run for M variations
-        HP_opts = [10, 100, 1000, 10000]
+        HP_opts = [0.02, 0.01, 0.005, 0.001]
         HP_results = []
-        EXPERIMENT_NAME = "M10_K[100_20]_L[2_48]_X_BVAR_pm02"
+        EXPERIMENT_NAME = "M10_K[100_20]_L[2_48]_X_B1000_pmVAR"
         
         if not USE_PAPER_LASSONET:
             initial_model = return_MLP_skip_estimator(Xt, Xv, yt, yv, activation='tanh', K=best_K, verbose=1, patience=100, epochs=20_000, drop=0, lr=0.01)
@@ -100,14 +101,14 @@ for d_nlags in dlag_opt:
                 network.compile(optimizer=ks.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=ks.losses.MeanSquaredError())
                 network.load_weights('temp_weights.weights.h5')
                 res_k, _, res_val, res_l, res_oos = return_LassoNet_results(
-                    network, Xt, Xv, yt, yv, pm=0.02, M=hp, patiences=(100, 10), max_iters=(1000, 1000), print_path=True, print_lambda=True, starting_lambda=None, a=0.01, Xtest=Xtest, ytest=ytest, min_improvement=0.99, steps_back=3)
+                    network, Xt, Xv, yt, yv, pm=hp, M=10, patiences=(100, 10), max_iters=(1000, 1000), print_path=True, print_lambda=True, starting_lambda=None, a=0.01, Xtest=Xtest, ytest=ytest, min_improvement=0.99, steps_back=3)
             
             HP_results.append((res_k, res_oos, res_l))
 
         # Plot selected features against mse
-        results_plot(HP_opts, HP_results, use=(0, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_KMSE", show=True)
-        results_plot(HP_opts, HP_results, use=(0, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_KMSE", show=False)
-        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$M$", name=f"{EXPERIMENT_NAME}_LK", show=True, log_scale=True)
-        results_plot(HP_opts, HP_results, use=(2, 0), title=r"$M$", name=f"{EXPERIMENT_NAME}_LK", show=False, log_scale=True)
-        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_LMSE", show=True, log_scale=True)
-        results_plot(HP_opts, HP_results, use=(2, 1), title=r"$M$", name=f"{EXPERIMENT_NAME}_LMSE", show=False, log_scale=True)
+        results_plot(HP_opts, HP_results, use=(0, 1), title=changing_hp, name=f"{EXPERIMENT_NAME}_KMSE", show=True)
+        results_plot(HP_opts, HP_results, use=(0, 1), title=changing_hp, name=f"{EXPERIMENT_NAME}_KMSE", show=False)
+        results_plot(HP_opts, HP_results, use=(2, 0), title=changing_hp, name=f"{EXPERIMENT_NAME}_LK", show=True, log_scale=True)
+        results_plot(HP_opts, HP_results, use=(2, 0), title=changing_hp, name=f"{EXPERIMENT_NAME}_LK", show=False, log_scale=True)
+        results_plot(HP_opts, HP_results, use=(2, 1), title=changing_hp, name=f"{EXPERIMENT_NAME}_LMSE", show=True, log_scale=True)
+        results_plot(HP_opts, HP_results, use=(2, 1), title=changing_hp, name=f"{EXPERIMENT_NAME}_LMSE", show=False, log_scale=True)

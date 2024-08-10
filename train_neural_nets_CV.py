@@ -11,7 +11,7 @@ from investing_simulation import plot_returns, calc_investment_returns
 
 ###############################################################################################################################################################################################
 
-def main():
+def main(using_X):
     USE_LOG = False
     day_df = pd.read_csv(f'com_btc_day.csv') if USE_LOG else pd.read_csv(f'pct_btc_day.csv')
     hour_df = pd.read_csv(f'com_btc_hour.csv') if USE_LOG else pd.read_csv(f'pct_btc_hour.csv')
@@ -19,7 +19,7 @@ def main():
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 48)]
-    lag_opt = [(1, 0)]
+    # lag_opt = [(1, 0)]
 
     K_opt = [
         [10],
@@ -30,31 +30,31 @@ def main():
         [100, 20]
     ]
     
-    USE_X = True
+    USE_X = using_X
     USE_SKIP = True
-    VALIDATE_LAYER = False
+    VALIDATE_LAYER = True
     MASK = None
-    DEFAULT_K = [100, 30, 10]
+    DEFAULT_K = []
 
     activation      = 'tanh'
     n_cv_reps       = 5
     cv_patience     = 100
-    n_fm_reps       = 5
+    n_fm_reps       = 10
     fm_patience     = 100
     learning_rate   = 0.01
     es_tolerance    = 0
     dropout         = 0
-    use_l1_penalty  = False
+    use_l1_penalty  = True
     n_days_es       = 30
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/CVA_"
+    BASE_EXPERIMENT_NAME = "final_forecasts/BIASL1_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
     BASE_EXPERIMENT_NAME += "LOG_" if USE_LOG else ""
     BASE_EXPERIMENT_NAME += f"D{dropout:.2f}_" if dropout > 0 else ""
     BASE_EXPERIMENT_NAME += f"MASKED_" if MASK is not None else ""
 
-    PLOT_FINAL_FORECASTS = True
+    PLOT_FINAL_FORECASTS = False
 
     # Begin the training
     for d_nlags, h_nlags in lag_opt:
@@ -99,10 +99,10 @@ def main():
                     Xtt, Xtv, ytt, ytv = ms.train_test_split(Xt, yt, test_size=n_days_es, shuffle=False)
                     yval = y_pp.inverse_transform(yv.reshape(1, -1)).ravel()
 
-                    if USE_SKIP:
+                    if not USE_SKIP:
                         predictor = return_MLP_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
                     else:
-                        predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
+                        predictor = return_MLP_skip_estimator(Xtt, Xtv, ytt, ytv, verbose=0, K=K, activation=activation, epochs=20_000, patience=cv_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate, skip_bias=True)
                     ypred = predictor.predict(Xv).ravel()
                     ypred = y_pp.inverse_transform(ypred.reshape(1, -1)).ravel()
                     mse = mt.mean_squared_error(yval, ypred)
@@ -142,11 +142,12 @@ def main():
         # Robustness of final model
         final_results = np.zeros(n_fm_reps)
         for i in range(n_fm_reps):
-            if USE_SKIP:
+            if not USE_SKIP:
                 nn = return_MLP_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation=activation, epochs=20_000, patience=fm_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
             else:
                 nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation=activation, epochs=20_000, patience=fm_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
 
+            print(nn.get_layer('skip_layer').get_weights()[0])
             test_f = nn.predict(Xtest).ravel()
             test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
             experiment_mse = mt.mean_squared_error(ytest, test_f)
@@ -202,4 +203,5 @@ def main():
             plot_returns(ytest, yvaltrain, forecasts=[test_forecast, best_test_forecast, best_return_forecast], names=["TEST", "VAL", "RETURN"], strat=True)
 
 if __name__ == '__main__':
-    main()
+    main(False)
+    main(True)

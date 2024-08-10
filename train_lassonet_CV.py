@@ -34,16 +34,16 @@ def main():
     es_tolerance    = 0
     dropout         = 0
     path_multiplier = 0.01
-    B               = 1000
+    B               = 10
     M               = 10
     use_l1_penalty  = False
     
-    EXPERIMENT_NAME = "final_LN_forecasts/BW"
+    EXPERIMENT_NAME = "final_LN_forecasts/B10"
     EXPERIMENT_NAME += "LN_SNN_" if USE_SKIP else "LN_NN_"
     EXPERIMENT_NAME += f"{DEFAULT_K}_"
     EXPERIMENT_NAME += "X_" if USE_X else ""
 
-    LOAD_BACKUP = True
+    LOAD_BACKUP = False
 
     # Begin the training
     for d_nlags in dlag_opt:

@@ -119,19 +119,19 @@ def main():
     print("Data has been fully loaded")
 
     best_model_test_np = [
-        'final_forecasts/CV_SNN_X_1_0_FORECAST',
-        'final_forecasts/CV_SNN_X_2_0_FORECAST',
-        'final_forecasts/CV_SNN_X_1_24_FORECAST',
-        'final_forecasts/CV_SNN_X_2_24_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_1_0_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_2_0_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_1_24_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_2_48_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_X_2_0_LN_FORECAST',
         'final_LN_forecasts/LN_SNN_[100, 20]_X_2_48_LN_FORECAST',
     ]
 
     best_model_train_np = [
-        'final_forecasts/CV_SNN_X_1_0_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_X_2_0_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_X_1_24_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_X_2_24_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_1_0_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_2_0_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_1_24_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_X_2_48_TRAIN_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_X_2_0_LN_TRAIN_FORECAST',
         'final_LN_forecasts/LN_SNN_[100, 20]_X_2_48_LN_TRAIN_FORECAST',
     ]

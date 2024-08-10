@@ -120,21 +120,21 @@ def main():
     print("Data has been fully loaded")
 
     best_model_test_np = [
-        'final_forecasts/CV_SNN_1_0_FORECAST',
-        'final_forecasts/CV_SNN_2_0_FORECAST',
-        'final_forecasts/CV_SNN_1_24_FORECAST',
-        'final_forecasts/CV_SNN_2_48_FORECAST',
+        'final_forecasts/BIASL1_SNN_1_0_FORECAST',
+        'final_forecasts/BIASL1_SNN_2_0_FORECAST',
+        'final_forecasts/BIASL1_SNN_1_24_FORECAST',
+        'final_forecasts/BIASL1_SNN_2_48_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_2_12_LN_FORECAST',
-        'final_LN_forecasts/BWLN_SNN_[100, 20]_2_48_ALN_FORECAST',
+        'final_LN_forecasts/B10LN_SNN_[100, 20]_2_48_ALN_FORECAST',
     ]
 
     best_model_train_np = [
-        'final_forecasts/CV_SNN_1_0_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_2_0_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_1_24_TRAIN_FORECAST',
-        'final_forecasts/CV_SNN_2_48_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_1_0_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_2_0_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_1_24_TRAIN_FORECAST',
+        'final_forecasts/BIASL1_SNN_2_48_TRAIN_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_2_12_LN_TRAIN_FORECAST',
-        'final_LN_forecasts/BWLN_SNN_[100, 20]_2_48_ALN_TRAIN_FORECAST',
+        'final_LN_forecasts/B10LN_SNN_[100, 20]_2_48_ALN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
@@ -151,7 +151,7 @@ def main():
 
     paths_to_plot = {}
     series_to_test = {}
-    WITH_SHARPE = True
+    WITH_SHARPE = False
     USE_QUANTILES = True
 
     train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytrain)
