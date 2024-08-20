@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-experiment_name = "B10LN_SNN_[100, 20]_2_48"
+experiment_name = "M10000LN_SNN_[100, 20]_X_2_48"
 folds = np.load(f"final_LN_forecasts/{experiment_name}_ALLFOLDS.npy")
 l_path = np.load(f"final_LN_forecasts/{experiment_name}_CV_LAMBDA.npy")
 

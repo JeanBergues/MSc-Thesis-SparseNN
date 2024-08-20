@@ -19,7 +19,6 @@ def main(using_X):
     # Define the experiment parameters
 
     lag_opt = [(1, 0), (2, 0), (1, 24), (2, 48)]
-    # lag_opt = [(1, 0)]
 
     K_opt = [
         [10],
@@ -47,7 +46,7 @@ def main(using_X):
     use_l1_penalty  = True
     n_days_es       = 30
 
-    BASE_EXPERIMENT_NAME = "final_forecasts/BIASL1_"
+    BASE_EXPERIMENT_NAME = "final_forecasts/TEST_"
     BASE_EXPERIMENT_NAME += "SNN_" if USE_SKIP else "NN_"
     BASE_EXPERIMENT_NAME += "X_" if USE_X else ""
     BASE_EXPERIMENT_NAME += "LOG_" if USE_LOG else ""
@@ -148,6 +147,7 @@ def main(using_X):
                 nn = return_MLP_skip_estimator(Xt, Xv, yt, yv, verbose=0, K=best_K, activation=activation, epochs=20_000, patience=fm_patience, drop=dropout, use_L1=use_l1_penalty, es_tol=es_tolerance, lr=learning_rate)
 
             print(nn.get_layer('skip_layer').get_weights()[0])
+            print(nn.get_layer('gw_layer').get_weights()[0])
             test_f = nn.predict(Xtest).ravel()
             test_f = y_pp.inverse_transform(test_f.reshape(1, -1)).ravel()
             experiment_mse = mt.mean_squared_error(ytest, test_f)

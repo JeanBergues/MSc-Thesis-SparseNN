@@ -144,7 +144,7 @@ def main():
 
     best_model_train_txt = [
         'final_R_forecasts/MIDASX_train',
-        'final_R_forecasts/garch_train',
+        'final_R_forecasts/garchX_train',
         'final_R_forecasts/arimaX_day_train',
     ]
 
@@ -191,10 +191,10 @@ def main():
     print(f"Repeat MAPE: {mt.mean_absolute_percentage_error(ytest, y_prev):.3f}")
     print(f"Repeat %Correct: {np.sum(np.sign(ytest) == np.sign(y_prev)) / len(ytest) * 100:.3f}%")
 
-    # benchmark = np.load(f'skipx_forc/SKIPXA_day_test_1_1.npy')[-365:]
-    # for k, v in series_to_test.items():
-    #     print(k)
-    #     print(dm.dm_test(ytest, benchmark, v))
+    benchmark = np.full_like(ytest, np.mean(ytrain))
+    for k, v in series_to_test.items():
+        print(k)
+        print(dm.dm_test(ytest, benchmark, v))
 
     leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'Small LassoNet', 'Large LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
@@ -216,7 +216,7 @@ def main():
     plt.xlabel("Days")
     plt.ylabel("Cumulative returns")
 
-    # plt.savefig('plots/STRAT.eps', format='eps')
+    # plt.savefig(f'plots/TRADSIM_X_{"SHARPE" if WITH_SHARPE else "QUANT"}.eps', format='eps')
     plt.show()
 
 if __name__ == '__main__':

@@ -125,7 +125,7 @@ def main():
         'final_forecasts/BIASL1_SNN_1_24_FORECAST',
         'final_forecasts/BIASL1_SNN_2_48_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_2_12_LN_FORECAST',
-        'final_LN_forecasts/B10LN_SNN_[100, 20]_2_48_ALN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[100, 20]_2_48_LN_FORECAST',
     ]
 
     best_model_train_np = [
@@ -134,7 +134,7 @@ def main():
         'final_forecasts/BIASL1_SNN_1_24_TRAIN_FORECAST',
         'final_forecasts/BIASL1_SNN_2_48_TRAIN_FORECAST',
         'final_LN_forecasts/LN_SNN_[50]_2_12_LN_TRAIN_FORECAST',
-        'final_LN_forecasts/B10LN_SNN_[100, 20]_2_48_ALN_TRAIN_FORECAST',
+        'final_LN_forecasts/LN_SNN_[100, 20]_2_48_LN_TRAIN_FORECAST',
     ]
 
     best_model_test_txt = [
@@ -151,11 +151,11 @@ def main():
 
     paths_to_plot = {}
     series_to_test = {}
-    WITH_SHARPE = False
+    WITH_SHARPE = True
     USE_QUANTILES = True
 
     train_vol = np.loadtxt(f'final_R_forecasts/garch_train_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytrain)
-    test_vol = np.loadtxt(f'final_R_forecasts/roll_garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
+    test_vol = np.loadtxt(f'final_R_forecasts/garch_vol.txt').ravel() if WITH_SHARPE else np.ones_like(ytest)
 
     for mtest, mtrain in zip(best_model_test_np, best_model_train_np):
         fc = np.load(f'{mtest}.npy').ravel()[-365:]
@@ -178,6 +178,7 @@ def main():
         print(f"%Correct: {np.sum(np.sign(ytest) == np.sign(fc)) / len(fc) * 100:.3f}%")
         fret, investing_results = calc_investment_returns_with_Sharpe(tfc, fc, ytest, train_vol, test_vol, trad_cost=0.001, use_quantiles=USE_QUANTILES)
         print(f"RETURN: {fret*100:.2f}")
+        print()
         paths_to_plot[mtest] = investing_results
         series_to_test[mtest] = fc
 
@@ -187,15 +188,15 @@ def main():
     print(f"Only mean MAPE: {mt.mean_absolute_percentage_error(ytest, np.full_like(ytest, np.mean(ytrain))):.3f}")
     print(f"Only mean %Correct: {np.sum(np.sign(ytest) == np.sign(np.full_like(ytest, np.mean(ytrain)))) / len(ytest) * 100:.3f}%")
 
-    y_prev = y_raw[-366:-1]
-    print(f"Repeat MSE: {mt.mean_squared_error(ytest, y_prev):.3f}")
-    print(f"Repeat MAPE: {mt.mean_absolute_percentage_error(ytest, y_prev):.3f}")
-    print(f"Repeat %Correct: {np.sum(np.sign(ytest) == np.sign(y_prev)) / len(ytest) * 100:.3f}%")
+    # y_prev = y_raw[-366:-1]
+    # print(f"Repeat MSE: {mt.mean_squared_error(ytest, y_prev):.3f}")
+    # print(f"Repeat MAPE: {mt.mean_absolute_percentage_error(ytest, y_prev):.3f}")
+    # print(f"Repeat %Correct: {np.sum(np.sign(ytest) == np.sign(y_prev)) / len(ytest) * 100:.3f}%")
 
-    # benchmark = np.load(f'skipx_forc/SKIPXA_day_test_1_1.npy')[-365:]
-    # for k, v in series_to_test.items():
-    #     print(k)
-    #     print(dm.dm_test(ytest, benchmark, v))
+    benchmark = np.full_like(ytest, np.mean(ytrain))
+    for k, v in series_to_test.items():
+        print(k)
+        print(dm.dm_test(ytest, benchmark, v))
 
     leg = ['NN(1, 0)', 'NN(2, 0)', 'NN(1, 24)', 'NN(2, 48)', 'Small LassoNet', 'Large LassoNet', 'MIDAS', 'GARCH', 'ARIMA', 'Long', 'Short']
 
@@ -217,7 +218,7 @@ def main():
     plt.xlabel("Days")
     plt.ylabel("Cumulative returns")
 
-    # plt.savefig('plots/STRAT.eps', format='eps')
+    # plt.savefig(f'plots/TRADSIM_{"SHARPE" if WITH_SHARPE else "QUANT"}.eps', format='eps')
     plt.show()
 
 if __name__ == '__main__':

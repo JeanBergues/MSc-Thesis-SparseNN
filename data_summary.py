@@ -35,7 +35,7 @@ for i, col in enumerate(ddata.columns):
     sns.lineplot(x=ddate_range, y=ddata[col], ax=ax)
     sns.lineplot(x=hdate_range, y=hdata[col], ax=ax, size=1)
     plt.axvline(ddate_range.to_numpy()[-364], color='black', linestyle='--')
-    plt.axvline(ddate_range.to_numpy()[-484], color='black', linestyle='--')
+    #plt.axvline(ddate_range.to_numpy()[-484], color='black', linestyle='--')
     ax.set_title(f"returns of {col}")
     ax.set_ylabel(f"% difference")
     ax.legend_.remove()
@@ -43,7 +43,7 @@ for i, col in enumerate(ddata.columns):
     print(f"Finished subplot {i+1}")
 
 plt.subplots_adjust(hspace=1)
-plt.savefig('plots/dh_rets.eps', format='eps')
+plt.savefig('plots/dh_rets_noval.eps', format='eps')
 # plt.show()
 
 fig = plt.figure(figsize=(15, 20), )
@@ -51,12 +51,12 @@ for i, col in enumerate(mdata.columns):
     ax = plt.subplot(7, 1, i+1)
     sns.lineplot(x=fullmdata.date, y=mdata[col], ax=ax)
     plt.axvline(ddate_range.to_numpy()[-364], color='black', linestyle='--')
-    plt.axvline(ddate_range.to_numpy()[-484], color='black', linestyle='--')
+    #plt.axvline(ddate_range.to_numpy()[-484], color='black', linestyle='--')
     ax.set_title(f"level of {col}")
     ax.set_ylabel(f"US$" if col not in ['volume', 'tradesDone'] else f"amount")
     if i == 6: ax.set_xlabel(f"date")
     print(f"Finished subplot {i+1}")
 
 plt.subplots_adjust(hspace=1)
-plt.savefig('plots/level_plots.eps', format='eps')
+plt.savefig('plots/level_plots_noval.eps', format='eps')
 # plt.show()
