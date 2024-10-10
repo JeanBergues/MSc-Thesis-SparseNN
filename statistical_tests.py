@@ -5,7 +5,7 @@ import statsmodels.stats.stattools as stats
 hdata = pd.read_csv('pct_btc_hour.csv')
 ddata = pd.read_csv('pct_btc_day.csv').iloc[-365:]
 
-DAY = False
+DAY = True
 if DAY:
     df = ddata
 else:

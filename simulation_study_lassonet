@@ -1,0 +1,89 @@
+import numpy as np
+import tensorflow as tf
+import keras as ks
+import sklearn.model_selection as ms
+import sklearn.metrics as mt
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from network_definitions import return_MLP_skip_estimator, return_MLP_estimator
+from lassonet_implementation import return_LassoNet_results, paper_lassonet_results, train_lasso_path, estimate_starting_lambda
+
+def generate_nonlinear_dataset(N = 100, f = lambda x: (0.7*np.abs(x)) / (np.abs(x) + 2)):
+    series = np.zeros(N)
+    series[0] = 1
+    series[1] = 1
+    series[2] = 1
+
+    for i in range(3, N):
+        series[i] = f(series[i-1]) + f(series[i-2]) + np.random.standard_normal()
+    return series
+
+def main():
+    NX = 1
+    N = 10000
+    K = [10]
+    include_xlags = 2
+
+    non_skip_results = np.zeros(NX)
+    skip_results = np.zeros(NX)
+    lassonet_results = np.zeros(NX)
+
+    for ex in range(NX):
+        print(f"Starting experiment number {ex}")
+        data = generate_nonlinear_dataset(N=N)
+
+        sns.lineplot(data)
+        plt.show()
+
+        y = data[include_xlags:].reshape(-1, 1)
+        Xlist = np.arange(1, len(y) + 1).reshape(-1, 1)
+        for t_h in range(0, include_xlags):
+            Xlist = np.concatenate(
+                [
+                    Xlist,
+                    data[(include_xlags-1-t_h):(-1-t_h)].reshape(-1, 1),
+                ], axis=1)
+        X = Xlist[:, 1:]
+
+        Xtrainfull, Xtest, ytrainfull, ytest = ms.train_test_split(X, y, test_size=0.2, shuffle=False)
+        Xtrain, Xval, ytrain, yval = ms.train_test_split(Xtrainfull, ytrainfull, test_size=0.1, shuffle=False)
+
+        non_skip_predictor = return_MLP_estimator(Xtrain, Xval, ytrain, yval, K=K, verbose=0)
+        skip_predictor = return_MLP_skip_estimator(Xtrain, Xval, ytrain, yval, K=K, verbose=0)
+
+        non_skip_prediction = non_skip_predictor.predict(Xtest)
+        skip_prediction = skip_predictor.predict(Xtest)
+        non_skip_results[ex] = mt.mean_squared_error(ytest, non_skip_prediction)
+        skip_results[ex] = mt.mean_squared_error(ytest, skip_prediction)
+
+        # starting_lambda = estimate_starting_lambda(skip_predictor.get_layer('skip_layer').get_weights()[0], skip_predictor.get_layer('gw_layer').get_weights()[0], 10, verbose=True, steps_back=3) / 0.01
+        # lassonet_predictor = train_lasso_path(skip_predictor, starting_lambda, Xtrain, Xval, ytrain, yval, ks.optimizers.SGD(momentum=0.9), ks.losses.MeanSquaredError(), lr=0.01, verbose=True)[-1]
+        # lassonet_prediction = lassonet_predictor.predict(Xtest)
+        # lassonet_results[ex] = mt.mean_squared_error(ytest, lassonet_prediction)
+
+        sns.lineplot(x=range(len(ytest)), y=ytest.ravel())
+        sns.lineplot(x=range(len(ytest)), y=non_skip_prediction.ravel(), color='orange')
+        sns.lineplot(x=range(len(ytest)), y=skip_prediction.ravel(), color='green')
+        # sns.lineplot(x=range(len(ytest)), y=lassonet_prediction, color='black')
+        plt.show()
+
+        print(f"Mean MSE")
+        print(mt.mean_squared_error(ytest, np.full_like(ytest, np.mean(ytrainfull))))
+
+    # print(non_skip_results)
+    # print(skip_results)
+
+    print(np.mean(non_skip_results))
+    print(np.std(non_skip_results))
+    print(np.mean(skip_results))
+    print(np.std(skip_results))
+    print(np.mean(lassonet_results))
+    print(np.std(lassonet_results))
+
+
+if __name__ == '__main__':
+    np.random.seed(1234)
+    tf.random.set_seed(1234)
+    ks.utils.set_random_seed(1234)
+    main()
