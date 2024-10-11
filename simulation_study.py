@@ -36,18 +36,16 @@ def generate_nonlinear_dataset(N = 100, K = [10], features=5, remove_lags_skip =
     new_skip_layer = dgp.get_layer('skip_layer').get_weights()
     new_skip_layer[0] = skip_weights.reshape((-1, 1))
     dgp.get_layer('skip_layer').set_weights(new_skip_layer)
-    print(dgp.get_layer('skip_layer').get_weights())
 
     new_gw_layer = dgp.get_layer('gw_layer').get_weights()
     new_gw_layer[0] = gw_weights
     new_gw_layer[1] = gw_bias
     dgp.get_layer('gw_layer').set_weights(new_gw_layer)
-    print(dgp.get_layer('gw_layer').get_weights())
 
     for t in range(features, N):
         X_input = np.array([series[t-i-1] for i in range(features)]).reshape(1, -1)
-        #series[t] = dgp.predict(X_input, verbose=0) + np.random.normal()
-        series[t] = dgp(X_input, training=False) + np.random.normal()
+        # series[t] = dgp.predict(X_input, verbose=0) + 0.5*np.random.normal()
+        series[t] = dgp(X_input, training=False) + 0.5*np.random.normal()
 
     return series
 
@@ -55,12 +53,12 @@ def main():
     # Experiment setup
     # [2, 3, 4, 5, 6, 7, 8, 9]
     NX = 1
-    N = 1000
+    N = 500
     include_xlags = 10
-    remove_skip_lags = [2, 3, 4, 5, 6, 7, 8, 9]
-    remove_gw_lags = [2, 3, 4, 5, 6, 7, 8, 9]
+    remove_skip_lags = []
+    remove_gw_lags = []
     K = [10]
-    alpha = 0.01
+    alpha = 0.001
 
     # Begin experiment
     all_features = set(range(include_xlags))
@@ -96,23 +94,31 @@ def main():
                 ], axis=1)
         X = Xlist[:, 1:]
 
-        Xt, Xv, yt, yv = ms.train_test_split(X, y, test_size=0.1, shuffle=False)
+        Xtrain, Xtest, ytrain, ytest = ms.train_test_split(X, y, test_size= N // 10, shuffle=False)
+        Xt, Xv, yt, yv = ms.train_test_split(Xtrain, ytrain, test_size=N // 10, shuffle=False)
         skip_predictor = return_MLP_skip_estimator(Xt, Xv, yt, yv, K=K, verbose=0, lr=alpha)
+        dense_mse = mt.mean_squared_error(ytest, skip_predictor.predict(Xtest).ravel())
+
 
         starting_lambda = estimate_starting_lambda(skip_predictor.get_layer('skip_layer').get_weights()[0], skip_predictor.get_layer('gw_layer').get_weights()[0], 10, verbose=True, steps_back=3) / alpha
-        lassonet_results = train_lasso_path(skip_predictor, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=alpha, momentum=0.9), ks.losses.MeanSquaredError(), lr=alpha, verbose=True, min_improvement=0.995, patience=5, use_best_weights=True, use_faster_eval=False)
+        lassonet_results = train_lasso_path(skip_predictor, starting_lambda, Xt, Xv, yt, yv, ks.optimizers.SGD(learning_rate=alpha, momentum=0.9), ks.losses.MeanSquaredError(), lr=alpha, verbose=True, min_improvement=0.99, patience=10, max_epochs_per_lambda=100,
+                                            use_best_weights=True, use_faster_eval=False, X_test=Xtest, y_test=ytest, pm=0.01)
 
         k_array = np.array(lassonet_results[0])
         v_array = np.array(lassonet_results[2])
+        t_array = np.array(lassonet_results[4])
 
-        best_theta = lassonet_results[1][np.argmin(v_array)]
+        final_model_index = np.argmin(v_array)
+        best_theta = lassonet_results[1][final_model_index]
         selected_features = set(list(np.argwhere(np.array(best_theta).ravel() != 0).ravel()))
         print(selected_features)
 
         unique_k = np.unique(k_array)
         lowest_values = [np.min(v_array[k_array == k]) for k in unique_k]
-        sns.lineplot(x=unique_k, y=lowest_values)
+        lowest_test_values = [np.min(t_array[k_array == k]) for k in unique_k]
 
+        sns.lineplot(x=unique_k, y=lowest_values)
+        sns.lineplot(x=unique_k, y=lowest_test_values)
         plt.show()
         # Add oos performance metric
 
@@ -121,14 +127,19 @@ def main():
         R_pct[ex] = 1 - len(R_features.difference(selected_features)) / len(R_features)         if len(R_features) > 0 else 1
         I_pct[ex] = len(I_features.difference(selected_features)) / len(I_features)             if len(I_features) > 0 else 1
 
+        print(f"Dense MSE: {dense_mse:.4f}")
+        print(f"Final MSE: {t_array[final_model_index]:.4f}")
+        print(f"MSE Change: {(t_array[final_model_index] / dense_mse - 1) * 100:.4f}")
+
     print(f"Correct LR: {np.mean(LR_pct)}")
     print(f"Correct NLR: {np.mean(NLR_pct)}")
     print(f"Correct R: {np.mean(R_pct)}")
     print(f"Correct I: {np.mean(I_pct)}")
+    
 
 
 if __name__ == '__main__':
-    seed = 1235
+    seed = 1237
     np.random.seed(seed)
     tf.random.set_seed(seed)
     ks.utils.set_random_seed(seed)
