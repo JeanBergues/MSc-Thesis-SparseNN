@@ -1,0 +1,7 @@
+Finished experiment number 99
+DMSE = 0.2717,  FMSE = 0.2534,  PCT = -6.7306,  NF = 0.0
+LR = 0.000,     NLR = 0.000,    R = 0.000,      I = 1.000
+Mean results:
+DMSE = 0.2851,  FMSE = 0.2582,  PCT = -8.5276,  NF = 6.01,      NI = 0.790
+LR = 0.620,     NLR = 0.620,    R = 0.620,      I = 0.404
+Experiment took 190.0 seconds
