@@ -53,11 +53,11 @@ def generate_nonlinear_dataset(N = 100, K = [10], features=5, remove_lags_skip =
 def main():
     # Experiment setup
     # [2, 3, 4, 5, 6, 7, 8, 9]
-    TEST_NAME = 'simulation_results/OFFICIAL_R2NL8'
+    TEST_NAME = 'simulation_results/OFFICIAL_R10'
     NX = 100
     N = 500
     include_xlags = 10
-    remove_skip_lags = [2, 3, 4, 5, 6, 7, 8, 9]
+    remove_skip_lags = []
     remove_gw_lags = []
     K = [10]
     alpha = 0.001
