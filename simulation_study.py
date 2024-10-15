@@ -57,8 +57,8 @@ def main():
     NX = 100
     N = 1500
     include_xlags = 10
-    remove_skip_lags = []
-    remove_gw_lags = []
+    remove_skip_lags = [2, 3, 4, 5, 6, 7, 8, 9]
+    remove_gw_lags = [2, 3, 4, 5, 6, 7, 8, 9]
     K = [10]
     alpha = 0.001
 
