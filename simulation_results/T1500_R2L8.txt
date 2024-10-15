@@ -1,0 +1,7 @@
+Finished experiment number 99
+MMSE = 0.2469, LMSE = 0.2534, DMSE = 0.2526,    FMSE = 0.2410,  PCT = -4.5715,  NF = 10.0
+LR = 1.000,     NLR = 1.000,    R = 1.000,      I = 1.000,      MPCT = -2.3783,         LPCT = -4.8649
+Mean results:
+MMSE = 0.2633, LMSE = 0.2639, DMSE = 0.2634,    FMSE = 0.2572,  PCT = -2.1774,  NF = 6.66
+LR = 0.666,     NLR = 0.665,    R = 0.666,      I = 1.000,      NI = 0.760,     NMI = 0.740,    NLI = 0.710
+Experiment took 258.0 seconds,  MPCT = -2.1325,         LPCT = -2.3739
