@@ -53,7 +53,7 @@ def generate_nonlinear_dataset(N = 100, K = [10], features=5, remove_lags_skip =
 def main():
     # Experiment setup
     # [2, 3, 4, 5, 6, 7, 8, 9]
-    TEST_NAME = 'simulation_results/T1500_R10'
+    TEST_NAME = 'simulation_results/T1500_R2I8'
     NX = 100
     N = 1500
     include_xlags = 10
@@ -91,15 +91,14 @@ def main():
         stationary = False
         while not stationary:
             data = generate_nonlinear_dataset(N=N, K=K, features=include_xlags, remove_lags_skip=remove_skip_lags, remove_lags_gw=remove_gw_lags)
-            sns.lineplot(data)
-            plt.show()
+            # sns.lineplot(data)
+            # plt.show()
             p = tsa.adfuller(data)[1]
             if p < 0.05:
                 stationary = True
                 print("Finished generating data.")
             else:
                 print("Failed test: retrying")
-            return
         
         y = data[include_xlags:].reshape(-1, 1)
         Xlist = np.arange(1, len(y) + 1).reshape(-1, 1)
